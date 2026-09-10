@@ -4,7 +4,7 @@ Aplicación web **estática** para consultar y localizar los servicios y centros
 del **Ministerio de la Mujer y Poblaciones Vulnerables (MIMP)** del Perú. Funciona
 íntegramente en el navegador y se publica en GitHub Pages sin ningún servidor.
 
-Contiene **826 servicios** en los 25 departamentos, 196 provincias y 433 distritos del país.
+Contiene **704 centros de atención físicos** repartidos por los 25 departamentos del país.
 
 ---
 
@@ -12,15 +12,16 @@ Contiene **826 servicios** en los 25 departamentos, 196 provincias y 433 distrit
 
 | | |
 |---|---|
-| **Ubicación** | Detecta tu posición con el GPS del navegador, o permite marcar un punto en el mapa si prefieres no dar el permiso. |
+| **Ubicación** | Detecta tu posición con el GPS del navegador desde la propia barra de filtros. |
 | **Ranking de cercanía** | Ordena los centros del más próximo al más lejano y los numera 1, 2, 3… |
 | **Distancia y tiempo** | Distancia real sobre el terreno y estimación del trayecto en automóvil. |
 | **Radio de búsqueda** | Deslizador de 1 km a 250 km, o sin límite. Sólo se listan los centros dentro del radio. |
-| **Filtros territoriales** | Departamento → provincia → distrito, en cascada y con el número de centros de cada uno. |
+| **Filtros territoriales** | Barra superior con departamento → provincia → distrito en cascada, con el número de centros de cada uno. |
 | **Combinación** | Los filtros territoriales y la búsqueda por cercanía se aplican a la vez. |
-| **Tipo de servicio** | 29 tipos: CEM, Hogares de Refugio Temporal, CAR, CEDIF, UPE, SAR, Línea 100… |
+| **Tipo de centro** | 20 tipos: CEM, CAR, CEDIF, UPE, SAR, CAD, CARPAM, SAU… |
 | **Búsqueda libre** | Por nombre, dirección, responsable o código, ignorando tildes. |
-| **Mapa interactivo** | Límites departamentales, provinciales y distritales del Perú, con agrupación de marcadores. |
+| **Mapa interactivo** | Límites departamentales, provinciales y distritales del Perú. El detalle sigue al filtro y el mapa hace zoom automático al territorio elegido, que queda remarcado. |
+| **Iconos por tipo** | Cada tipo de centro usa su icono oficial del MIMP; los que la clasificación no cubre llevan un marcador con su sigla y color propios. |
 | **Ficha detallada** | Dirección, responsable, teléfono, modalidad, servicios básicos del local, ubigeo y coordenadas. |
 | **Cómo llegar** | Abre la ruta en Google Maps desde tu ubicación. |
 | **Enlace compartible** | El estado de la búsqueda se guarda en la URL. |
@@ -46,12 +47,17 @@ npm start       # sirve app/ en http://localhost:8080
 npm run build
 ```
 
-Ese comando encadena tres pasos:
+Ese comando encadena cuatro pasos:
 
 1. **`fetch:geo`** — descarga la cartografía de
    [Peru-maps](https://github.com/Rodasluis/Peru-maps) (`salida/`) a `.cache/geo`.
 2. **`build:data`** — lee `Directorio de servicios.xlsx` y genera `app/data/centros.json`.
-3. **`build:geo`** — simplifica y reparte las capas geográficas en `app/data/geo/`.
+3. **`build:iconos`** — extrae los iconos de `Icons para centros de atención.xlsx`
+   a `app/assets/iconos/` y los asocia a cada tipo en `app/data/iconos.json`.
+4. **`build:geo`** — simplifica y reparte las capas geográficas en `app/data/geo/`.
+
+Conviene leer la salida de `build:data`: enumera cuántos centros se publican, cuáles se
+excluyen y por qué motivo, y **avisa si aparece un tipo de servicio sin clasificar**.
 
 Los datos generados **están versionados**, así que sólo hace falta ejecutarlo cuando
 cambie el Excel de origen.
@@ -90,10 +96,12 @@ Todas las rutas del proyecto son relativas, así que funciona igual en
 
 ```
 ├── Directorio de servicios.xlsx   fuente de datos (no se publica)
+├── Icons para centros de atención.xlsx   iconos por tipo (no se publica)
 ├── app/                           ← esto es lo que se publica
 │   ├── index.html
 │   ├── assets/
 │   │   ├── css/styles.css
+│   │   ├── iconos/                iconos por tipo de centro (del .xlsx)
 │   │   └── js/
 │   │       ├── app.js             estado, filtros y orquestación
 │   │       ├── datos.js           carga del directorio y filtrado
@@ -101,7 +109,8 @@ Todas las rutas del proyecto son relativas, así que funciona igual en
 │   │       ├── mapa.js            capa Leaflet
 │   │       └── ui.js              listado y ficha detallada
 │   └── data/
-│       ├── centros.json           826 servicios + catálogo territorial
+│       ├── centros.json           704 centros físicos + catálogo territorial
+│       ├── iconos.json            tipo de centro → icono y color
 │       └── geo/
 │           ├── departamentos.geojson
 │           ├── provincias/<cc>.geojson
@@ -110,7 +119,7 @@ Todas las rutas del proyecto son relativas, así que funciona igual en
 ```
 
 Las capas provinciales y distritales están **partidas por departamento** y se descargan
-sólo cuando hacen falta: la carga inicial son unos 720 KB (directorio + departamentos),
+sólo cuando hacen falta: la carga inicial son unos 650 KB (directorio + departamentos + iconos),
 y ningún archivo posterior supera los 272 KB.
 
 ---
@@ -141,7 +150,33 @@ Para el trayecto real, el botón **Cómo llegar** abre Google Maps.
 
 ---
 
-## Calidad de los datos
+## Qué servicios se publican
+
+De los 826 registros del directorio se publican **704**: los que son un centro de atención
+físico *y* tienen coordenadas propias. La condición se compone de tres reglas, en
+`tools/build-data.mjs`:
+
+1. **Automática** — sin coordenadas propias no hay punto que mapear.
+2. **Revisada** — cada valor de la columna `CENTRO` se clasificó leyendo su columna
+   `Servicio`, sus nombres y sus direcciones. El motivo queda escrito junto a cada regla
+   en la tabla `CLASIFICACION`, para poder auditarlo.
+3. **Por defecto excluye** — un tipo de servicio que no figure en esa tabla **no aparece**
+   y el build lo avisa. Así, si el MIMP añade un servicio nuevo, nadie lo publica en el
+   mapa sin haberlo revisado antes.
+
+| Excluidos | Registros | Motivo |
+|---|---:|---|
+| Hogares de Refugio Temporal | 29 | Dirección reservada para proteger a las víctimas |
+| Coordinación Territorial | 26 | Oficina administrativa, no atiende público |
+| SOUFCAT | 24 | «Sede de operación de la UFCAT» |
+| Educadores de Calle | 23 | Intervención en vía pública |
+| Familias Igualitarias | 10 | Programa por zonas, opera dentro de un CEDIF |
+| CAR Especializado | 6 | Sin coordenadas en el directorio |
+| Línea 100 · Chat 100 | 2 | Atención telefónica y virtual de alcance nacional |
+| Inabif en Acción | 1 | Equipo móvil de emergencias |
+| Unidad de Asistencia Económica | 1 | Unidad administrativa |
+
+## Calidad de las coordenadas
 
 Cada coordenada del directorio se contrastó con los límites distritales del INEI:
 
@@ -150,7 +185,7 @@ Cada coordenada del directorio se contrastó con los límites distritales del IN
 | El punto cae en el distrito declarado | 739 | Se usa tal cual. |
 | El punto cae en otro distrito | 50 | Se usa, y la ficha advierte que puede ser aproximado. |
 | El punto no cae en ningún distrito | 2 | Se usa, con la misma advertencia. |
-| Sin coordenadas | 35 | Se sitúa en el centroide del distrito y se excluye del ranking. |
+| Sin coordenadas | 35 | Se excluyen del mapa. |
 
 Otros ajustes que hace `tools/build-data.mjs`:
 
@@ -161,11 +196,11 @@ Otros ajustes que hace `tools/build-data.mjs`:
 - Los **nombres** se normalizan a mayúscula inicial conservando las siglas (`CEM`, `CAR`,
   `CEDIF`…), y los de departamento, provincia y distrito se toman del catálogo oficial de
   ubigeos, con sus tildes.
-- **Línea 100** y **Chat 100** se marcan como no presenciales: se atienden por teléfono en
-  todo el país, así que quedan fuera del ranking por cercanía y su ficha ofrece *Llamar*
-  en lugar de *Cómo llegar*.
-- Los **Hogares de Refugio Temporal** no publican dirección por protección de las víctimas;
-  aparecen en las búsquedas territoriales, marcados como *ubicación referencial*.
+- Los **iconos** se extraen del `.xlsx` leyendo los anclajes de dibujo del libro (la
+  etiqueta de cada imagen es el texto de la fila donde está anclada) y se cruzan con los
+  tipos del directorio por nombre normalizado. El color del aro es el tono dominante del
+  propio PNG, descodificado sin dependencias externas; si sale demasiado claro para verse
+  sobre la chapa blanca, se oscurece.
 - El ubigeo de 6 dígitos es la clave de unión con la cartografía: los 826 registros cruzan
   correctamente. La etiqueta administrativa del MIMP (*Lima Metropolitana* / *Lima
   Provincias*) se conserva aparte, en el campo `ambito`, mientras que los filtros y el mapa

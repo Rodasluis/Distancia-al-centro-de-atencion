@@ -3,7 +3,7 @@
  * y persistencia del estado en la URL para poder compartir una búsqueda.
  */
 
-import { cargarDirectorio, filtrar, tienePuntoExacto } from './datos.js';
+import { cargarDirectorio, cargarIconos, filtrar } from './datos.js';
 import { MapaCentros } from './mapa.js';
 import { pintarLista, construirFicha } from './ui.js';
 
@@ -29,7 +29,7 @@ const el = {
   radioControl: $('#radio-control'),
   btnGeo: $('#btn-geo'),
   btnGeoTxt: $('#btn-geo-txt'),
-  btnPin: $('#btn-pin'),
+  btnQuitarUbicacion: $('#btn-quitar-ubicacion'),
   btnLimpiar: $('#btn-limpiar'),
   btnTema: $('#btn-tema'),
   btnAyuda: $('#btn-ayuda'),
@@ -51,10 +51,11 @@ const estado = {
   dep: '', prov: '', dist: '', tipo: '', q: '',
   orden: 'nombre',
   seleccionado: null,
-  capa: 'departamentos',
+  capa: 'auto',
 };
 
 let DIR = null;
+let ICONOS = null;
 let mapa = null;
 let ultimaLista = [];
 let ultimoFoco = null;
@@ -123,7 +124,7 @@ function escribirURL() {
     if (estado.tipo) p.set('tipo', estado.tipo);
     if (estado.q) p.set('q', estado.q);
     if (estado.orden !== 'nombre') p.set('orden', estado.orden);
-    if (estado.capa !== 'departamentos') p.set('capa', estado.capa);
+    if (estado.capa !== 'auto') p.set('capa', estado.capa);
     if (estado.origen) {
       p.set('o', `${estado.origen.lat.toFixed(5)},${estado.origen.lon.toFixed(5)}`);
       p.set('r', String(estado.radioIdx));
@@ -203,7 +204,7 @@ function textoRadio() {
 }
 
 function refrescar({ moverMapa = false } = {}) {
-  const { lista, fueraDeRadio, sinPunto, totalTerritorial } = filtrar(DIR.centros, {
+  const { lista, fueraDeRadio, totalTerritorial } = filtrar(DIR.centros, {
     origen: estado.origen,
     radioKm: radioKm(),
     dep: estado.dep,
@@ -227,14 +228,7 @@ function refrescar({ moverMapa = false } = {}) {
     notas.push(`${fueraDeRadio} ${fueraDeRadio === 1 ? 'centro queda' : 'centros quedan'} `
       + `fuera del radio de ${textoRadio().toLowerCase()}.`);
   }
-  if (estado.origen && sinPunto > 0) {
-    notas.push(sinPunto === 1
-      ? '1 servicio no entra en el ranking por cercanía: se atiende por teléfono '
-        + 'o su dirección es reservada.'
-      : `${sinPunto} servicios no entran en el ranking por cercanía: se atienden `
-        + 'por teléfono o su dirección es reservada.');
-  }
-  if (notas.length) notas.push('Quita tu ubicación para verlos todos.');
+  if (notas.length) notas.push('Amplía el radio o quita tu ubicación para verlos todos.');
   el.aviso.textContent = notas.join(' ');
   el.aviso.hidden = notas.length === 0;
 
@@ -257,6 +251,7 @@ function refrescar({ moverMapa = false } = {}) {
     hayOrigen: Boolean(estado.origen),
     ordenCercania: estado.orden === 'cercania',
     seleccionado: estado.seleccionado,
+    marcaDe: (tipo) => mapa.marcaDe(tipo),
     mensajeVacio,
     accionVacio,
   });
@@ -275,13 +270,38 @@ function refrescar({ moverMapa = false } = {}) {
   escribirURL();
 }
 
-/** Elige la capa de límites más informativa según el filtro territorial. */
+/** Código del territorio seleccionado, en el nivel más fino elegido. */
+const territorioActual = () => estado.dist || estado.prov || estado.dep || '';
+
+/**
+ * Elige la capa de límites. En modo «auto» el detalle acompaña al filtro:
+ * sin filtro se ven los departamentos; con departamento, sus provincias;
+ * con provincia o distrito, los distritos de ese departamento.
+ */
 async function sincronizarLimites() {
   const ccdd = estado.dep || null;
   let nivel = estado.capa;
-  // Provincias y distritos sólo existen por departamento.
+
+  if (nivel === 'auto') {
+    if (estado.prov || estado.dist) nivel = 'distritos';
+    else if (estado.dep) nivel = 'provincias';
+    else nivel = 'departamentos';
+  }
+  // Provincias y distritos se sirven por departamento: sin uno elegido no
+  // hay archivo que cargar y se cae a la capa nacional.
   if ((nivel === 'provincias' || nivel === 'distritos') && !ccdd) nivel = 'departamentos';
+
   await mapa.mostrarLimites(nivel, ccdd);
+}
+
+/** Recalcula capas y encuadre tras cambiar un filtro territorial. */
+async function aplicarTerritorio() {
+  await sincronizarLimites();
+  refrescar();
+  // El encuadre territorial manda sobre el del radio: el usuario acaba de
+  // pedir explícitamente ver esa zona.
+  await mapa.encuadrarTerritorio(territorioActual());
+  if (!territorioActual() && estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
 }
 
 /* =========================================================== ficha === */
@@ -389,21 +409,19 @@ function conectarEventos() {
     estado.dep = el.dep.value;
     estado.prov = ''; estado.dist = '';
     llenarProvincias(); llenarDistritos();
-    await sincronizarLimites();
-    refrescar({ moverMapa: true });
+    await aplicarTerritorio();
   });
 
   el.prov.addEventListener('change', async () => {
     estado.prov = el.prov.value;
     estado.dist = '';
     llenarDistritos();
-    await sincronizarLimites();
-    refrescar({ moverMapa: true });
+    await aplicarTerritorio();
   });
 
-  el.dist.addEventListener('change', () => {
+  el.dist.addEventListener('change', async () => {
     estado.dist = el.dist.value;
-    refrescar({ moverMapa: true });
+    await aplicarTerritorio();
   });
 
   el.tipo.addEventListener('change', () => {
@@ -435,15 +453,7 @@ function conectarEventos() {
   });
 
   el.btnGeo.addEventListener('click', pedirGeolocalizacion);
-
-  el.btnPin.addEventListener('click', () => {
-    const activo = el.btnPin.getAttribute('aria-pressed') === 'true';
-    mapa.activarModoPin(!activo);
-    if (!activo) {
-      estadoUbicacion('Toca el mapa para marcar tu punto de partida.');
-      if (window.matchMedia('(max-width: 860px)').matches) cambiarVista('mapa');
-    }
-  });
+  el.btnQuitarUbicacion.addEventListener('click', quitarOrigen);
 
   el.btnLimpiar.addEventListener('click', async () => {
     estado.dep = ''; estado.prov = ''; estado.dist = '';
@@ -487,7 +497,6 @@ function conectarEventos() {
     if (e.key !== 'Escape') return;
     if (!el.ficha.hidden) cerrarFicha();
     else if (!el.acerca.hidden) cerrarAcerca();
-    else if (mapa.modoPin) { mapa.activarModoPin(false); estadoUbicacion('Selección cancelada.'); }
   });
 
   /* capas del mapa */
@@ -533,7 +542,7 @@ async function iniciar() {
   leerURL();
 
   try {
-    DIR = await cargarDirectorio();
+    [DIR, ICONOS] = await Promise.all([cargarDirectorio(), cargarIconos()]);
   } catch (err) {
     el.cargando.innerHTML =
       '<div style="text-align:center;max-width:34ch">'
@@ -545,11 +554,7 @@ async function iniciar() {
     return;
   }
 
-  mapa = new MapaCentros('mapa', {
-    alSeleccionar: abrirFicha,
-    alElegirPunto: (p) => fijarOrigen({ ...p, fuente: 'mapa' }, 'Punto marcado en el mapa.'),
-    alCambiarModoPin: (activo) => el.btnPin.setAttribute('aria-pressed', String(activo)),
-  });
+  mapa = new MapaCentros('mapa', { alSeleccionar: abrirFicha }, ICONOS);
   mapa.aplicarTema(temaOscuroActivo());
 
   llenarDepartamentos();
@@ -572,11 +577,15 @@ async function iniciar() {
 
   conectarEventos();
   await sincronizarLimites();
-  refrescar({ moverMapa: true });
+  refrescar();
+  // Si el enlace traía un territorio, se encuadra; si no, se ve todo el Perú.
+  if (territorioActual()) await mapa.encuadrarTerritorio(territorioActual());
+  else if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
 
   el.leyenda.hidden = false;
   el.pieMeta.textContent =
-    `${DIR.meta.total} servicios · datos actualizados el ${DIR.meta.generado}.`;
+    `${DIR.meta.total} centros de atención físicos · ${DIR.meta.excluidos} servicios `
+    + `sin local o sin coordenadas quedan fuera · datos del ${DIR.meta.generado}.`;
 
   cambiarVista(window.matchMedia('(max-width: 860px)').matches ? 'lista' : 'lista');
 

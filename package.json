@@ -8,7 +8,8 @@
     "fetch:geo": "node tools/fetch-geo.mjs",
     "build:data": "node --max-old-space-size=4096 tools/build-data.mjs .cache/geo",
     "build:geo": "node --max-old-space-size=6144 tools/build-geo.mjs .cache/geo",
-    "build": "npm run fetch:geo && npm run build:data && npm run build:geo",
+    "build:iconos": "node tools/build-iconos.mjs",
+    "build": "npm run fetch:geo && npm run build:data && npm run build:iconos && npm run build:geo",
     "start": "npx --yes http-server app -p 8080 -c-1 -o"
   },
   "devDependencies": {

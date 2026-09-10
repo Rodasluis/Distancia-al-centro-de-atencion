@@ -164,7 +164,8 @@ function titleCase(s) {
   return s.toLowerCase().split(/(\s+|-|\/)/).map((w, i) => {
     if (!w || /^(\s+|-|\/)$/.test(w)) return w;
     if (SIGLAS.has(w)) return w.toUpperCase();
-    if (/^(?:[a-zñ]\.){2,}$/.test(w)) return w.toUpperCase();   // "c.a.i." -> "C.A.I."
+    // "c.a.i." y también "c.a.i" (sin punto final) -> "C.A.I."
+    if (/^[a-zñ](?:\.[a-zñ]){1,}\.?$/.test(w)) return w.toUpperCase();
     if (i > 0 && MINOR.has(w)) return w;
     if (/^\d/.test(w)) return w.toUpperCase();
     return w.charAt(0).toUpperCase() + w.slice(1);
@@ -252,18 +253,85 @@ const C = {
 
 const stats = { verificada: 0, otroDistrito: 0, referencial: 0, sinCoordenadas: 0, reparadas: 0 };
 
-/**
- * Servicios de alcance nacional que se atienden por teléfono o chat. Tienen
- * una dirección administrativa, pero nadie "va" a ellos: se dejan fuera del
- * ranking por cercanía para no presentarlos como el centro más próximo.
- */
-const NO_PRESENCIAL = new Set(['Chat 100', 'Linea 100']);
+/* ------------------------------------------------------------------ *
+ * ¿Es un centro de atención físico?
+ *
+ * El directorio no tiene ninguna columna que lo diga, así que la condición
+ * se compone de dos reglas y de un valor por defecto prudente:
+ *
+ *   1. Automática: sin coordenadas propias no hay punto que mapear.
+ *   2. Revisada:   cada valor de la columna CENTRO se clasificó leyendo su
+ *                  columna «Servicio», sus nombres y sus direcciones. El
+ *                  motivo queda escrito al lado para poder auditarlo.
+ *   3. Por defecto: un CENTRO que no figure aquí se EXCLUYE y el build avisa.
+ *                   Así, si el MIMP añade un servicio nuevo, no aparece en el
+ *                   mapa sin que alguien lo haya revisado antes.
+ * ------------------------------------------------------------------ */
+const CLASIFICACION = {
+  // — Con local de atención al público —
+  'Centro Emergencia Mujer y Familia': [true, 'Local de atención al público, regular o en comisaría'],
+  'Servicio de Atención Rural - SAR': [true, 'Punto de atención fijo en zona rural'],
+  'CAR Básico': [true, 'Centro de acogida residencial'],
+  'CAR Especializado': [true, 'Centro de acogida residencial'],
+  'CAR de Urgencia': [true, 'Centro de acogida residencial'],
+  'CAR PCD': [true, 'Centro de acogida residencial para personas con discapacidad'],
+  'Centro de Atención Residencial para Personas Adultas Mayores - CARPAM': [true, 'Residencia para personas adultas mayores'],
+  'Hogares de Refugio Temporal - HRT': [true, 'Casa de acogida; la dirección es reservada, así que la regla 1 lo deja fuera del mapa'],
+  'Centro de Desarrollo Integral de La Familia - CEDIF': [true, 'Centro de cuidado diurno'],
+  'Centro Comunal Familiar': [true, 'Extensión del CEDIF en local comunal'],
+  'Centro de Recreación Familiar': [true, 'Extensión del CEDIF con local propio'],
+  'Centro de Atención de Día - CAD': [true, 'Centro de día para personas adultas mayores'],
+  'Centro de Atención de Noche - CAN': [true, 'Centro de noche para personas adultas mayores'],
+  'Centro de Atencion Institucional - CAI': [true, 'Centro de atención institucional'],
+  'Mi60+': [true, 'Local de acogida temporal para personas adultas mayores'],
+  'Servicio de Atención Urgente - SAU': [true, 'Sede con equipo de atención urgente'],
+  'Unidad de Adopción - UA': [true, 'Oficina de atención al público para adopciones'],
+  'Unidad de Protección Especial - UPE': [true, 'Oficina de atención al público para protección de NNA'],
+  'SAIPD': [true, 'Servicio de atención integral a personas con discapacidad, con local'],
+  'Acercándonos': [true, 'EFFA: espacio de fortalecimiento familiar con local'],
+  'Plataforma de Atención': [true, 'Oficina de la Red Alivia con atención presencial'],
+
+  // — Sin local de atención al público —
+  'Linea 100': [false, 'Servicio telefónico de alcance nacional'],
+  'Chat 100': [false, 'La columna Servicio lo define como orientación virtual'],
+  'Educadores de Calle': [false, 'Intervención en vía pública; la dirección es su oficina'],
+  'Familias Igualitarias': [false, 'Programa por zonas: se nombra «Zona X» y opera dentro de un CEDIF'],
+  'Coordinación Territorial': [false, 'Oficina administrativa de coordinación, no atiende público'],
+  'SOUFCAT': [false, 'La columna Servicio lo define como «Sede de operación de la UFCAT»'],
+  'Inabif en Acción': [false, 'Equipo móvil de emergencias y urgencias'],
+  'Unidad de Asistencia Económica y Acompañamiento': [false, 'Unidad administrativa de asistencia económica'],
+};
+
+/** Pistas textuales para orientar la revisión de un CENTRO desconocido. */
+function sugerirClasificacion(centro, servicio) {
+  const t = `${centro} ${servicio}`.toLowerCase();
+  const marcas = [
+    [/virtual|chat|l[ií]nea\s*\d|telef[óo]nic/, 'menciona atención virtual o telefónica'],
+    [/sede de operaci[óo]n|coordinaci[óo]n|unidad funcional|administrativ/, 'parece una sede administrativa'],
+    [/educadores de calle|itinerante|m[óo]vil|en acci[óo]n/, 'parece un servicio itinerante o en vía pública'],
+  ];
+  for (const [re, motivo] of marcas) if (re.test(t)) return motivo;
+  return 'sin pistas claras en las columnas CENTRO y Servicio';
+}
+
+const centrosSinClasificar = new Map();
 
 const centros = data.map((r) => {
   const ub = clean(r[C.UB]).padStart(6, '0');
   const cd = catDist.get(ub);
   const ccdd = ub.slice(0, 2);
   const ccpp = ub.slice(0, 4);
+
+  const tipoCentro = clean(r[C.CENTRO]);
+  const regla = CLASIFICACION[tipoCentro];
+  if (!regla) {
+    centrosSinClasificar.set(tipoCentro,
+      sugerirClasificacion(tipoCentro, clean(r[C.SERV])));
+  }
+  // Sin regla revisada se excluye: es preferible omitir un centro real a
+  // publicar en el mapa un servicio que no atiende presencialmente.
+  const presencial = regla ? regla[0] : false;
+  const motivo = regla ? regla[1] : 'tipo de servicio sin clasificar (revisar CLASIFICACION en tools/build-data.mjs)';
 
   let lat = null, lon = null, calidad = 'sin_coordenadas';
   const rep = repairPair(r[C.X], r[C.Y]);
@@ -307,7 +375,8 @@ const centros = data.map((r) => {
     responsable: clean(r[C.RESP]) || null,
     telefono: clean(r[C.TEL]) || null,
     vraem: yesNo(r[C.VRAEM]) === 1,
-    presencial: !NO_PRESENCIAL.has(clean(r[C.CENTRO])),
+    presencial,
+    motivoNoPresencial: presencial ? null : motivo,
     lat,
     lon,
     calidad,
@@ -327,11 +396,42 @@ console.log('  coordenadas → verificadas:', stats.verificada,
   '| sin coord (centroide):', stats.sinCoordenadas,
   '| reparadas:', stats.reparadas);
 
+/* ------------------------------------------------------------------ *
+ * Se publican únicamente los centros de atención físicos y localizables.
+ * ------------------------------------------------------------------ */
+const tienePunto = (c) => c.calidad !== 'centroide_distrito';
+const publicables = centros.filter((c) => c.presencial && tienePunto(c));
+
+/* Informe de exclusiones, agrupado por tipo y motivo. */
+const excluidos = new Map();
+for (const c of centros) {
+  if (c.presencial && tienePunto(c)) continue;
+  const motivo = !c.presencial ? c.motivoNoPresencial : 'sin coordenadas propias en el directorio';
+  const clave = `${c.tipo}||${motivo}`;
+  excluidos.set(clave, (excluidos.get(clave) || 0) + 1);
+}
+
+console.log(`\n› centros de atención físicos publicados: ${publicables.length} de ${centros.length}`);
+console.log('› excluidos:');
+for (const [clave, n] of [...excluidos].sort((a, b) => b[1] - a[1])) {
+  const [tipo, motivo] = clave.split('||');
+  console.log(`   ${String(n).padStart(3)}  ${tipo}`);
+  console.log(`        ↳ ${motivo}`);
+}
+
+if (centrosSinClasificar.size) {
+  console.log('\n⚠ TIPOS DE SERVICIO SIN CLASIFICAR — se han excluido por precaución.');
+  console.log('  Revísalos y añádelos a CLASIFICACION en tools/build-data.mjs:');
+  for (const [tipo, pista] of centrosSinClasificar) {
+    console.log(`   · «${tipo}» → ${pista}`);
+  }
+}
+
 /* --- catálogo territorial: sólo lugares que efectivamente tienen centros --- */
 const depSet = new Map();
 const provSet = new Map();
 const distSet = new Map();
-for (const c of centros) {
+for (const c of publicables) {
   depSet.set(c.ccdd, catDep.get(c.ccdd)?.nombre || c.dep);
   provSet.set(c.ccpp, { nombre: catProv.get(c.ccpp)?.nombre || c.prov, ccdd: c.ccdd });
   distSet.set(c.ubigeo, { nombre: c.dist, ccpp: c.ccpp, ccdd: c.ccdd });
@@ -344,7 +444,7 @@ const catalogo = {
     .sort((a, b) => collator.compare(a.nombre, b.nombre)),
   distritos: [...distSet].map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => collator.compare(a.nombre, b.nombre)),
-  tipos: [...new Set(centros.map((c) => c.tipo))].sort(collator.compare),
+  tipos: [...new Set(publicables.map((c) => c.tipo))].sort(collator.compare),
 };
 
 fs.mkdirSync(OUT, { recursive: true });
@@ -352,11 +452,14 @@ fs.writeFileSync(path.join(OUT, 'centros.json'), JSON.stringify({
   meta: {
     fuente: 'Directorio de Servicios del MIMP',
     generado: new Date().toISOString().slice(0, 10),
-    total: centros.length,
+    total: publicables.length,
+    totalDirectorio: centros.length,
+    excluidos: centros.length - publicables.length,
     calidadCoordenadas: stats,
   },
   catalogo,
-  centros,
+  // Se omiten «presencial» y «motivoNoPresencial»: aquí todos son presenciales.
+  centros: publicables.map(({ presencial, motivoNoPresencial, ...c }) => c),
 }));
 console.log('✓ app/data/centros.json', (fs.statSync(path.join(OUT, 'centros.json')).size / 1024).toFixed(0) + ' KB');
 

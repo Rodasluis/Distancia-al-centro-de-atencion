@@ -48,75 +48,58 @@
   </div>
 </header>
 
+<!-- ─────────────────────────────────────── barra de filtros ── -->
+<form class="barra" id="barra" role="search" aria-label="Filtros de búsqueda">
+  <div class="barra__campos">
+    <div class="campo">
+      <label for="f-dep">Departamento</label>
+      <select id="f-dep"><option value="">Todos</option></select>
+    </div>
+    <div class="campo">
+      <label for="f-prov">Provincia</label>
+      <select id="f-prov" disabled><option value="">Todas</option></select>
+    </div>
+    <div class="campo">
+      <label for="f-dist">Distrito</label>
+      <select id="f-dist" disabled><option value="">Todos</option></select>
+    </div>
+    <div class="campo">
+      <label for="f-tipo">Tipo de centro</label>
+      <select id="f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="campo campo--buscar">
+      <label for="f-q">Buscar</label>
+      <div class="campo__buscar">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 1 0 4.9 14.32l5.39 5.39 1.42-1.42-5.39-5.39A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
+        <input type="search" id="f-q" placeholder="Nombre, dirección, responsable…" autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  <div class="barra__acciones">
+    <button class="btn btn--primary" id="btn-geo" type="button">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="m2 11 20-8-8 20-2.5-8.5L2 11Z"/></svg>
+      <span id="btn-geo-txt">Usar mi ubicación</span>
+    </button>
+    <button class="btn btn--ghost" id="btn-limpiar" type="button">Limpiar</button>
+  </div>
+</form>
+
+<!-- Segunda fila: sólo aparece cuando hay una ubicación activa -->
+<div class="barra barra--radio" id="radio-control" hidden>
+  <div class="radio-control">
+    <label for="radio">Radio de búsqueda</label>
+    <input type="range" id="radio" min="0" max="16" step="1" value="8" aria-describedby="ubicacion-estado">
+    <output class="radio-control__valor" id="radio-valor" for="radio">25 km</output>
+  </div>
+  <p class="ubicacion__estado" id="ubicacion-estado" role="status"></p>
+  <button class="btn btn--ghost btn--sm" id="btn-quitar-ubicacion" type="button">Quitar ubicación</button>
+</div>
+
 <div class="layout">
 
-  <!-- ───────────────────────────── panel de filtros + resultados ── -->
-  <aside class="panel" id="panel" aria-label="Filtros y resultados">
-
-    <section class="card card--ubicacion">
-      <h2 class="card__title">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.94 3a9 9 0 0 0-7.94-7.94V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2h-2.06ZM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>
-        Tu ubicación
-      </h2>
-
-      <div class="ubicacion__botones">
-        <button class="btn btn--primary" id="btn-geo" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="m2 11 20-8-8 20-2.5-8.5L2 11Z"/></svg>
-          <span id="btn-geo-txt">Usar mi ubicación</span>
-        </button>
-        <button class="btn btn--ghost" id="btn-pin" type="button" aria-pressed="false" title="Marcar un punto en el mapa">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
-          Elegir en el mapa
-        </button>
-      </div>
-
-      <p class="ubicacion__estado" id="ubicacion-estado" role="status">
-        Activa tu ubicación para ordenar los centros por cercanía.
-      </p>
-
-      <div class="radio-control" id="radio-control" hidden>
-        <div class="radio-control__head">
-          <label for="radio">Radio de búsqueda</label>
-          <output class="radio-control__valor" id="radio-valor" for="radio">25 km</output>
-        </div>
-        <input type="range" id="radio" min="0" max="16" step="1" value="6"
-               aria-describedby="radio-nota">
-        <p class="hint" id="radio-nota">Sólo se muestran los centros dentro del radio.</p>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2 class="card__title">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 5h18v2.5l-7 7V21l-4-2v-6.5l-7-7V5Z"/></svg>
-        Filtros
-      </h2>
-
-      <div class="campo">
-        <label for="f-dep">Departamento</label>
-        <select id="f-dep"><option value="">Todos</option></select>
-      </div>
-      <div class="campo">
-        <label for="f-prov">Provincia</label>
-        <select id="f-prov" disabled><option value="">Todas</option></select>
-      </div>
-      <div class="campo">
-        <label for="f-dist">Distrito</label>
-        <select id="f-dist" disabled><option value="">Todos</option></select>
-      </div>
-      <div class="campo">
-        <label for="f-tipo">Tipo de servicio</label>
-        <select id="f-tipo"><option value="">Todos los servicios</option></select>
-      </div>
-      <div class="campo">
-        <label for="f-q">Buscar</label>
-        <div class="campo__buscar">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 1 0 4.9 14.32l5.39 5.39 1.42-1.42-5.39-5.39A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
-          <input type="search" id="f-q" placeholder="Nombre, dirección, responsable…" autocomplete="off">
-        </div>
-      </div>
-
-      <button class="btn btn--ghost btn--block" id="btn-limpiar" type="button">Limpiar filtros</button>
-    </section>
+  <!-- ─────────────────────────────────────── resultados ── -->
+  <aside class="panel" id="panel" aria-label="Resultados">
 
     <section class="resultados" id="resultados">
       <div class="resultados__head">
@@ -154,11 +137,13 @@
       <div class="leyenda__cuerpo" id="leyenda-cuerpo" hidden>
         <fieldset>
           <legend class="sr-only">Límites territoriales</legend>
-          <label><input type="radio" name="capa" value="departamentos" checked> Departamentos</label>
+          <label><input type="radio" name="capa" value="auto" checked> Automático</label>
+          <label><input type="radio" name="capa" value="departamentos"> Departamentos</label>
           <label><input type="radio" name="capa" value="provincias"> Provincias</label>
           <label><input type="radio" name="capa" value="distritos"> Distritos</label>
           <label><input type="radio" name="capa" value="ninguna"> Sin límites</label>
         </fieldset>
+        <p class="leyenda__nota">En «Automático» el detalle sigue al filtro territorial.</p>
       </div>
     </div>
   </main>
@@ -216,11 +201,25 @@
         No sustituye a un servicio de rutas: para el trayecto real usa el botón
         <em>Cómo llegar</em>, que abre Google Maps.</p>
 
+      <h3>Qué se muestra y qué no</h3>
+      <p>El mapa recoge únicamente los <strong>centros de atención físicos con coordenadas
+        propias</strong>. Quedan fuera dos grupos:</p>
+      <ul>
+        <li>Los servicios <strong>sin local de atención al público</strong>: los telefónicos o
+          virtuales (Línea 100, Chat 100), los de intervención en calle o por zonas (Educadores de
+          Calle, Familias Igualitarias) y las sedes administrativas u operativas
+          (Coordinación Territorial, SOUFCAT).</li>
+        <li>Los que <strong>no publican coordenadas</strong>, como los Hogares de Refugio Temporal,
+          cuya dirección se reserva para proteger a las víctimas.</li>
+      </ul>
+      <p>La clasificación se hizo revisando cada servicio del directorio, y un tipo nuevo que no
+        haya sido revisado queda fuera del mapa hasta que se compruebe si atiende al público.</p>
+
       <h3>Ubicación de los centros</h3>
       <p>Cada punto se contrastó con los límites distritales oficiales del INEI. Cuando el punto no
-        cae dentro del distrito declarado, la ficha lo advierte. Los servicios cuya dirección es
-        <strong>confidencial</strong> —como los Hogares de Refugio Temporal— no tienen punto exacto:
-        se sitúan en el centro de su distrito y quedan fuera del ranking por cercanía.</p>
+        cae dentro del distrito declarado, la ficha lo advierte.</p>
+      <p>El icono de cada marcador corresponde a su tipo de centro, según la clasificación gráfica
+        del MIMP. Los tipos que esa clasificación no cubre llevan un marcador con su sigla.</p>
 
       <h3>Privacidad</h3>
       <p>Tu ubicación se usa <strong>únicamente en tu navegador</strong> para ordenar la lista. No se

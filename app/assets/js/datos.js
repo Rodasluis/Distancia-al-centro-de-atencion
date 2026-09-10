@@ -1,6 +1,10 @@
 /**
  * Carga del directorio y aplicación de los filtros.
- * Todo ocurre en memoria: el conjunto son ~830 registros.
+ * Todo ocurre en memoria: el conjunto son ~700 registros.
+ *
+ * centros.json contiene únicamente centros de atención físicos con
+ * coordenadas propias; qué se publica y qué no se decide al construir los
+ * datos (véase CLASIFICACION en tools/build-data.mjs), no aquí.
  */
 
 import { distanciaKm, estimarViaje } from './geo.js';
@@ -29,15 +33,12 @@ export async function cargarDirectorio() {
   return DIRECTORIO;
 }
 
-/** Un centro tiene punto real si no se le asignó el centroide del distrito. */
-export const tienePuntoExacto = (c) => c.calidad !== 'centroide_distrito';
-
-/**
- * Sólo entran en el ranking por cercanía los servicios presenciales con un
- * punto real. Los de atención telefónica (Línea 100, Chat 100) atienden a
- * todo el país, y los de dirección reservada no publican su punto.
- */
-export const entraEnRanking = (c) => c.presencial !== false && tienePuntoExacto(c);
+/** Carga el catálogo de iconos por tipo de centro. */
+export async function cargarIconos() {
+  const res = await fetch(new URL('iconos.json', BASE));
+  if (!res.ok) throw new Error(`No se pudo cargar el catálogo de iconos (HTTP ${res.status})`);
+  return res.json();
+}
 
 /**
  * Aplica los filtros y devuelve la lista ya ordenada.
@@ -62,12 +63,11 @@ export function filtrar(centros, estado) {
 
   // Distancia y tiempo estimado respecto del origen.
   let fueraDeRadio = 0;
-  let sinPunto = 0;
+  const sinPunto = 0;
   const totalTerritorial = out.length;
   if (origen) {
     const conMedidas = [];
     for (const c of out) {
-      if (!entraEnRanking(c)) { sinPunto++; continue; }
       const km = distanciaKm(origen.lat, origen.lon, c.lat, c.lon);
       if (radioKm !== null && km > radioKm) { fueraDeRadio++; continue; }
       const viaje = estimarViaje(km, c.ccdd);

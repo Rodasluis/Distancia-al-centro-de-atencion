@@ -107,10 +107,20 @@
 /* --------------------------------------------------------------- base -- */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Las reglas de autor con display: flex/grid ganan a la regla [hidden] de la
+   hoja del navegador, así que un elemento con hidden seguiría viéndose. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
+/* Columna flexible: cabecera + barra(s) + contenido. Así el alto del área
+   central se ajusta solo cuando aparece o desaparece la fila del radio. */
 body {
   margin: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   font-family: var(--fuente);
   font-size: 14px;
   line-height: 1.5;
@@ -146,7 +156,7 @@ img { max-width: 100%; }
 
 /* ------------------------------------------------------------ topbar -- */
 .topbar {
-  position: sticky; top: 0; z-index: 900;
+  z-index: 900; flex: none;
   height: var(--topbar-h);
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 0 14px;
@@ -222,11 +232,56 @@ img { max-width: 100%; }
 .btn--icon { padding: 8px; color: var(--tinta-2); }
 .btn--block { width: 100%; margin-top: 11px; }
 
+/* ------------------------------------------- barra de filtros superior -- */
+.barra {
+  display: flex; align-items: flex-end; gap: 10px;
+  padding: 10px 14px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+}
+
+.barra__campos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) minmax(160px, 1.4fr);
+  gap: 10px;
+  flex: 1; min-width: 0;
+}
+
+.barra__acciones { display: flex; align-items: flex-end; gap: 7px; flex: none; }
+
+.barra .campo { margin: 0; min-width: 0; }
+
+.barra--radio {
+  align-items: center;
+  gap: 14px;
+  padding-block: 8px;
+  background: var(--mimp-suave);
+  border-bottom-color: var(--mimp-borde);
+}
+
+.radio-control {
+  display: flex; align-items: center; gap: 10px;
+  flex: 0 1 420px; min-width: 240px;
+}
+.radio-control label {
+  font-size: 12.5px; font-weight: 600; color: var(--tinta-2); white-space: nowrap;
+}
+.radio-control input[type="range"] { flex: 1; margin: 0; }
+.radio-control__valor {
+  font-size: 13.5px; font-weight: 700; color: var(--mimp);
+  font-variant-numeric: tabular-nums; min-width: 68px; text-align: right;
+}
+
+.barra--radio .ubicacion__estado { margin: 0; flex: 1; min-width: 0; }
+
+.btn--sm { padding: 6px 10px; font-size: 12px; }
+
 /* ------------------------------------------------------------- layout -- */
 .layout {
   display: grid;
   grid-template-columns: var(--panel-w) 1fr;
-  height: calc(100dvh - var(--topbar-h));
+  flex: 1;
+  min-height: 0;
 }
 
 .panel {
@@ -238,46 +293,13 @@ img { max-width: 100%; }
   scrollbar-width: thin;
 }
 
-.card {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--r-md);
-  padding: 13px;
-  box-shadow: var(--sombra-1);
-}
-
-.card__title {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--tinta-3);
-  margin-bottom: 11px;
-}
-.card__title svg { color: var(--mimp); }
-
-.card--ubicacion { border-color: var(--mimp-borde); background: var(--mimp-suave); }
-.card--ubicacion .btn--ghost { --btn-bg: var(--superficie); }
-
 /* ---------------------------------------------------------- ubicación -- */
-.ubicacion__botones { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
-@media (max-width: 460px) { .ubicacion__botones { grid-template-columns: 1fr; } }
-
 .ubicacion__estado {
-  margin-top: 9px; font-size: 12.5px; color: var(--tinta-2);
+  font-size: 12.5px; color: var(--tinta-2);
   display: flex; align-items: flex-start; gap: 6px;
 }
 .ubicacion__estado.is-ok    { color: var(--exito); font-weight: 600; }
 .ubicacion__estado.is-error { color: var(--peligro); }
-
-.radio-control { margin-top: 13px; padding-top: 12px; border-top: 1px dashed var(--mimp-borde); }
-.radio-control__head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  margin-bottom: 4px;
-}
-.radio-control__head label { font-size: 12.5px; font-weight: 600; color: var(--tinta-2); }
-.radio-control__valor {
-  font-size: 14px; font-weight: 700; color: var(--mimp);
-  font-variant-numeric: tabular-nums;
-}
 
 input[type="range"] {
   width: 100%; margin: 4px 0; accent-color: var(--mimp);
@@ -355,11 +377,18 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 
 .item__rank {
   display: grid; place-items: center;
-  width: 26px; height: 26px; flex: none;
+  width: 28px; height: 28px; flex: none;
   font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
   color: var(--mimp); background: var(--mimp-suave);
   border: 1px solid var(--mimp-borde); border-radius: 50%;
 }
+/* Icono del tipo de centro cuando no hay ranking numérico */
+.item__rank--icono {
+  background: #fff;
+  border: 1.5px solid var(--pin-color, var(--borde-fuerte));
+}
+.item__rank--icono img { width: 18px; height: 18px; object-fit: contain; }
+.item__rank--icono .pin__sigla { font-size: 8px; }
 .item.is-top .item__rank { color: #fff; background: var(--mimp); border-color: var(--mimp); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) .item.is-top .item__rank { color: #24101b; }
@@ -407,11 +436,6 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 }
 .badge--vraem  { background: var(--alerta-suave); color: var(--alerta);
                  border-color: color-mix(in srgb, var(--alerta) 28%, transparent); }
-.badge--aprox  { background: var(--superficie-2); color: var(--tinta-3); border-color: var(--borde); }
-.badge--ok     { background: var(--exito-suave); color: var(--exito);
-                 border-color: color-mix(in srgb, var(--exito) 25%, transparent); }
-.badge--tel    { background: var(--mimp-suave); color: var(--mimp);
-                 border-color: var(--mimp-borde); }
 
 /* ---------------------------------------------------------------- pie -- */
 .pie {
@@ -441,22 +465,44 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 }
 .leaflet-popup-content { margin: 11px 13px; font-size: 13px; }
 
-/* marcadores propios */
+/* --------------------------------------------- marcadores de centro --
+   Cada tipo lleva el icono del libro del MIMP (o su sigla, si no lo tiene)
+   dentro de una chapa blanca con aro del color dominante del icono: así
+   siguen siendo legibles sobre cualquier mapa base. */
 .pin {
+  position: relative;
   display: grid; place-items: center;
   width: 100%; height: 100%;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  background: var(--mimp);
-  border: 2px solid var(--superficie);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, .35);
+  border-radius: 50%;
+  background: #fff;
+  border: 2.5px solid var(--pin-color, var(--mimp));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .38);
+  transition: transform .12s;
 }
+/* pico inferior de la chapa */
 .pin::after {
-  content: ""; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--superficie);
+  content: "";
+  position: absolute; bottom: -5px; left: 50%;
+  width: 7px; height: 7px;
+  background: var(--pin-color, var(--mimp));
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 0 0 2px 0;
 }
-.pin--activo { background: #1c7ed6; transform: rotate(-45deg) scale(1.28); z-index: 1000; }
-.pin--aprox  { background: var(--tinta-3); }
+.pin img {
+  width: 19px; height: 19px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.pin__sigla {
+  font-size: 8.5px; font-weight: 800; letter-spacing: -.02em;
+  color: var(--pin-color, var(--mimp));
+  line-height: 1;
+}
+.pin--activo {
+  transform: scale(1.35); z-index: 1000;
+  border-color: #1c7ed6; box-shadow: 0 3px 10px rgba(0, 0, 0, .45);
+}
+.pin--activo::after { background: #1c7ed6; }
 
 .pin-yo {
   width: 100%; height: 100%; border-radius: 50%;
@@ -495,6 +541,10 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   font-size: 12.5px; color: var(--tinta-2); cursor: pointer;
 }
 .leyenda__cuerpo input { accent-color: var(--mimp); margin: 0; }
+.leyenda__nota {
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--borde);
+  font-size: 11px; line-height: 1.4; color: var(--tinta-3); max-width: 22ch;
+}
 
 /* ------------------------------------------------------------- tabbar -- */
 .tabbar { display: none; }
@@ -646,13 +696,29 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 /* ================================================== diseño responsivo == */
 @media (max-width: 1080px) { :root { --panel-w: 340px; } }
 
+@media (max-width: 1180px) {
+  .barra__campos { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+  .campo--buscar { grid-column: span 2; }
+}
+
 @media (max-width: 860px) {
   :root { --topbar-h: 54px; }
 
-  .layout {
-    grid-template-columns: 1fr;
-    height: calc(100dvh - var(--topbar-h) - 56px);
-  }
+  /* En móvil la barra compite con el mapa por el alto: se compacta el
+     interlineado y las etiquetas para devolverle sitio. */
+  .barra { flex-wrap: wrap; gap: 7px; padding: 7px 12px; }
+  .barra__campos { grid-template-columns: 1fr 1fr; gap: 7px; width: 100%; }
+  .barra .campo > label { font-size: 11px; margin-bottom: 2px; }
+  .barra select, .barra input[type="search"] { padding-block: 7px; }
+  .campo--buscar { grid-column: span 2; }
+  .barra__acciones { width: 100%; }
+  .barra__acciones .btn { flex: 1; }
+
+  .barra--radio { flex-wrap: wrap; gap: 8px; }
+  .radio-control { flex: 1 1 100%; }
+  .barra--radio .ubicacion__estado { flex: 1 1 auto; font-size: 12px; }
+
+  .layout { grid-template-columns: 1fr; }
 
   .panel {
     border-right: 0;
@@ -664,7 +730,7 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   body[data-vista="lista"] .mapa-wrap { display: none; }
 
   .tabbar {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 950;
+    flex: none; z-index: 950;
     display: grid; grid-template-columns: 1fr 1fr;
     gap: 6px; padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
     background: var(--superficie);

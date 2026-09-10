@@ -3,7 +3,6 @@
  */
 
 import { formatearKm, formatearMinutos, urlComoLlegar, urlVerEnMapa } from './geo.js';
-import { tienePuntoExacto, entraEnRanking } from './datos.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,18 +55,19 @@ export function pintarLista(contenedor, centros, opciones) {
       metricas.push(`<span class="metrica metrica--dist">${svg(ICONOS.pin, 13)} ${esc(formatearKm(c._km))}</span>`);
       metricas.push(`<span class="metrica">${svg(ICONOS.auto, 13)} ${esc(formatearMinutos(c._viaje.minutos))}</span>`);
     }
-    if (c.presencial === false) {
-      metricas.push('<span class="badge badge--tel" title="Servicio de alcance nacional que se atiende por teléfono o chat">Atención telefónica</span>');
-    }
     if (c.vraem) metricas.push('<span class="badge badge--vraem">VRAEM</span>');
-    if (!tienePuntoExacto(c)) {
-      metricas.push('<span class="badge badge--aprox" title="Sin punto exacto: se ubica en el centro de su distrito">Ubicación referencial</span>');
-    }
+
+    // Con ranking se muestra el número; sin él, el icono del tipo de centro.
+    const marca = opciones.marcaDe?.(c.tipo);
+    const insignia = rank !== null
+      ? `<span class="item__rank" aria-hidden="true">${rank}</span>`
+      : `<span class="item__rank item__rank--icono" aria-hidden="true"
+               style="--pin-color:${marca?.color || 'var(--mimp)'}">${marca?.html || svg(ICONOS.pin, 13)}</span>`;
 
     li.innerHTML = `
       <button class="item${rank && rank <= 3 ? ' is-top' : ''}${c.id === opciones.seleccionado ? ' is-activo' : ''}"
               type="button" data-id="${c.id}">
-        <span class="item__rank" aria-hidden="true">${rank ?? svg(ICONOS.pin, 13)}</span>
+        ${insignia}
         <span class="item__cuerpo">
           <span class="item__tipo">${esc(c.tipo)}</span>
           <span class="item__nombre">${esc(c.nombre)}</span>
@@ -83,15 +83,7 @@ export function pintarLista(contenedor, centros, opciones) {
 
 /* -------------------------------------------------------------- ficha -- */
 
-const AVISO_TELEFONICO =
-  'Es un servicio de alcance nacional que se atiende por teléfono o chat, gratuito y las 24 horas. '
-  + 'La dirección corresponde a su sede administrativa: no necesitas acudir en persona.';
-
 const AVISOS_CALIDAD = {
-  centroide_distrito:
-    'Este servicio no publica una dirección exacta —en los hogares de refugio es una medida de '
-    + 'protección—. El punto del mapa es el centro del distrito, sólo como referencia. '
-    + 'Comunícate por teléfono para recibir indicaciones.',
   otro_distrito:
     'Las coordenadas registradas caen fuera del distrito declarado en el directorio. '
     + 'La ubicación del mapa puede ser aproximada: confirma por teléfono antes de desplazarte.',
@@ -135,8 +127,7 @@ export function construirFicha(c, origen) {
 
   /* avisos */
   const avisos = [];
-  if (c.presencial === false) avisos.push(AVISO_TELEFONICO);
-  else if (AVISOS_CALIDAD[c.calidad]) avisos.push(AVISOS_CALIDAD[c.calidad]);
+  if (AVISOS_CALIDAD[c.calidad]) avisos.push(AVISOS_CALIDAD[c.calidad]);
   if (c._viaje?.fluvial) {
     avisos.push('En esta zona de la Amazonía puede no existir vía carrozable: '
       + 'el acceso suele ser fluvial y el tiempo real será mayor que el estimado.');
@@ -218,10 +209,7 @@ export function construirFicha(c, origen) {
     ? `tel:${esc(c.telefono.replace(/[^\d+]/g, ''))}`
     : null;
 
-  // En los servicios telefónicos la acción principal es llamar, no desplazarse.
-  const pie = c.presencial === false
-    ? `<a class="btn btn--primary" href="${enlaceTel || 'tel:100'}">${svg(ICONOS.tel, 15)} Llamar ahora</a>`
-    : `
+  const pie = `
     <a class="btn btn--primary" href="${esc(urlComoLlegar(c, origen))}" target="_blank" rel="noopener">
       ${svg(ICONOS.auto, 15)} Cómo llegar
     </a>

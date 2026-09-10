@@ -3,7 +3,10 @@
  * y círculo del radio de búsqueda.
  */
 
-import { cargarCapa, tienePuntoExacto } from './datos.js';
+import { cargarCapa } from './datos.js';
+
+/** Raíz de la aplicación (app/), para resolver las rutas de los iconos. */
+const BASE_APP = new URL('../../', import.meta.url);
 
 const PERU_CENTRO = [-9.6, -75.5];
 const PERU_BOUNDS = L.latLngBounds([-18.6, -81.6], [0.2, -68.4]);
@@ -25,6 +28,9 @@ const BASEMAPS = {
     `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
 };
 const MAX_ZOOM_NATIVO = 16;
+
+/** Hasta este número de resultados, los marcadores no se agrupan. */
+const SIN_AGRUPAR_HASTA = 25;
 const ATRIBUCION =
   'Mapa base &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, '
   + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> y la comunidad SIG';
@@ -34,11 +40,16 @@ export class MapaCentros {
    * @param {string} idContenedor
    * @param {{alSeleccionar:Function, alElegirPunto:Function}} manejadores
    */
-  constructor(idContenedor, manejadores) {
+  /**
+   * @param {string} idContenedor
+   * @param {object} manejadores
+   * @param {object} iconos  catálogo de app/data/iconos.json
+   */
+  constructor(idContenedor, manejadores, iconos) {
     this.manejadores = manejadores;
+    this.iconos = iconos || { ruta: 'assets/iconos/', tipos: {} };
     this.marcadores = new Map();      // id de centro -> marcador
     this.seleccionado = null;
-    this.modoPin = false;
 
     this.mapa = L.map(idContenedor, {
       center: PERU_CENTRO,
@@ -86,11 +97,19 @@ export class MapaCentros {
     });
     this.grupo.addTo(this.mapa);
 
-    this.mapa.on('click', (e) => {
-      if (!this.modoPin) return;
-      this.activarModoPin(false);
-      this.manejadores.alElegirPunto({ lat: e.latlng.lat, lon: e.latlng.lng });
-    });
+    // Con pocos resultados agrupar estorba más que ayuda: se usa una capa
+    // simple para que cada centro se vea suelto sin depender del zoom.
+    this.grupoSimple = L.layerGroup().addTo(this.mapa);
+  }
+
+  /** Marca visual de un tipo de centro: icono del libro del MIMP, o su sigla. */
+  marcaDe(tipo) {
+    const def = this.iconos.tipos[tipo];
+    if (!def) return { color: '#8e1b60', html: '<span class="pin__sigla">?</span>' };
+    const html = def.archivo
+      ? `<img src="${new URL(this.iconos.ruta + def.archivo, BASE_APP)}" alt="" loading="lazy">`
+      : `<span class="pin__sigla">${def.sigla}</span>`;
+    return { color: def.color, html };
   }
 
   /* ------------------------------------------------------------ tema -- */
@@ -118,21 +137,20 @@ export class MapaCentros {
 
   /* -------------------------------------------------------- marcador -- */
   #icono(centro, activo) {
-    const clases = ['pin'];
-    if (activo) clases.push('pin--activo');
-    if (!tienePuntoExacto(centro)) clases.push('pin--aprox');
+    const { color, html } = this.marcaDe(centro.tipo);
     return L.divIcon({
-      html: `<div class="${clases.join(' ')}"></div>`,
+      html: `<div class="pin${activo ? ' pin--activo' : ''}" style="--pin-color:${color}">${html}</div>`,
       className: '',
-      iconSize: [22, 22],
-      iconAnchor: [11, 21],
-      popupAnchor: [0, -19],
+      iconSize: [28, 28],
+      iconAnchor: [14, 32],
+      popupAnchor: [0, -30],
     });
   }
 
   /** Redibuja los marcadores para la lista de centros dada. */
   dibujarCentros(centros) {
     this.grupo.clearLayers();
+    this.grupoSimple.clearLayers();
     this.marcadores.clear();
 
     const marcas = centros.map((c) => {
@@ -151,7 +169,9 @@ export class MapaCentros {
       return m;
     });
 
-    this.grupo.addLayers(marcas);
+    if (marcas.length <= SIN_AGRUPAR_HASTA) marcas.forEach((m) => m.addTo(this.grupoSimple));
+    else this.grupo.addLayers(marcas);
+
     if (this.seleccionado != null) this.resaltar(this.seleccionado, false);
   }
 
@@ -218,14 +238,6 @@ export class MapaCentros {
     }
   }
 
-  /* -------------------------------------------------- modo "elegir" -- */
-  activarModoPin(activo) {
-    this.modoPin = activo;
-    const el = this.mapa.getContainer();
-    el.style.cursor = activo ? 'crosshair' : '';
-    this.manejadores.alCambiarModoPin?.(activo);
-  }
-
   /* ------------------------------------------------------- límites --- */
   /**
    * Muestra los límites del nivel pedido. Provincias y distritos se cargan
@@ -272,18 +284,47 @@ export class MapaCentros {
     return { nivel: efectivo };
   }
 
-  /** Ajusta el encuadre al territorio seleccionado. */
-  async encuadrarTerritorio(nivel, codigo) {
-    if (!codigo) { this.mapa.fitBounds(PERU_BOUNDS, { padding: [10, 10] }); return; }
+  /**
+   * Encuadra el territorio elegido y lo remarca. El zoom máximo depende del
+   * nivel para que cada uno llene la pantalla de forma natural: un
+   * departamento entero, una provincia más cerca y un distrito aún más.
+   */
+  async encuadrarTerritorio(codigo) {
+    this.capaSeleccion?.remove();
+    this.capaSeleccion = null;
+
+    if (!codigo) {
+      this.mapa.fitBounds(PERU_BOUNDS, { padding: [10, 10] });
+      return;
+    }
+
     const ccdd = codigo.slice(0, 2);
-    const ruta = nivel === 'departamentos' ? 'departamentos.geojson'
-      : nivel === 'provincias' ? `provincias/${ccdd}.geojson`
-        : `distritos/${ccdd}.geojson`;
+    const porLongitud = {
+      2: { ruta: 'departamentos.geojson', maxZoom: 9 },
+      4: { ruta: `provincias/${ccdd}.geojson`, maxZoom: 11 },
+      6: { ruta: `distritos/${ccdd}.geojson`, maxZoom: 14 },
+    };
+    const cfg = porLongitud[codigo.length];
+    if (!cfg) return;
+
     try {
-      const datos = await cargarCapa(ruta);
+      const datos = await cargarCapa(cfg.ruta);
       const f = datos.features.find((x) => x.properties.ubigeo === codigo);
       if (!f) return;
-      this.mapa.fitBounds(L.geoJSON(f).getBounds(), { padding: [26, 26], maxZoom: 14 });
+
+      this.capaSeleccion = L.geoJSON(f, {
+        pane: 'limites',
+        interactive: false,
+        style: {
+          color: '#1c7ed6', weight: 2.6, opacity: .95,
+          fillColor: '#1c7ed6', fillOpacity: .07,
+          dashArray: '5 4',
+        },
+      }).addTo(this.mapa);
+
+      this.mapa.fitBounds(this.capaSeleccion.getBounds(), {
+        padding: [30, 30], maxZoom: cfg.maxZoom,
+      });
     } catch { /* si la capa falla, se deja el encuadre actual */ }
   }
 

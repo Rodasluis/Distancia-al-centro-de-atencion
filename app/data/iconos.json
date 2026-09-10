@@ -1,0 +1,106 @@
+{
+ "fuente": "Icons para centros de atención.xlsx",
+ "ruta": "assets/iconos/",
+ "tipos": {
+  "Centro de Atención de Día - CAD": {
+   "archivo": "centro-de-atencion-de-dia-cad.png",
+   "color": "#42a63a",
+   "etiqueta": "Centro de Atención de Día - CAD"
+  },
+  "Centro de Atencion Institucional - CAI": {
+   "archivo": "centro-de-atencion-institucional-cai.png",
+   "color": "#dc4649",
+   "etiqueta": "Centro de Atencion Institucional - CAI"
+  },
+  "Centro de Atención de Noche - CAN": {
+   "archivo": "centro-de-atencion-de-noche-can.png",
+   "color": "#ec8464",
+   "etiqueta": "Centro de Atención de Noche - CAN"
+  },
+  "CAR Básico": {
+   "archivo": "car-basico-o-car-especializado.png",
+   "color": "#0d6340",
+   "etiqueta": "CAR Básico o CAR Especializado"
+  },
+  "CAR Especializado": {
+   "archivo": "car-basico-o-car-especializado.png",
+   "color": "#0d6340",
+   "etiqueta": "CAR Básico o CAR Especializado"
+  },
+  "CAR de Urgencia": {
+   "archivo": "car-de-urgencia.png",
+   "color": "#1b64ab",
+   "etiqueta": "CAR de Urgencia"
+  },
+  "Centro de Atención Residencial para Personas Adultas Mayores - CARPAM": {
+   "archivo": "centro-de-atencion-residencial-para-personas-adu.png",
+   "color": "#e31e24",
+   "etiqueta": "Centro de Atención Residencial para Personas Adultas Mayores - CARPAM"
+  },
+  "CAR PCD": {
+   "archivo": "car-pcd.png",
+   "color": "#21602c",
+   "etiqueta": "CAR PCD"
+  },
+  "Centro de Desarrollo Integral de La Familia - CEDIF": {
+   "archivo": "centro-de-desarrollo-integral-de-la-familia-cedi.png",
+   "color": "#6e231c",
+   "etiqueta": "Centro de Desarrollo Integral de La Familia - CEDIF"
+  },
+  "Centro Emergencia Mujer y Familia": {
+   "archivo": "centro-emergencia-mujer-y-familia.png",
+   "color": "#b62539",
+   "etiqueta": "Centro Emergencia Mujer y Familia"
+  },
+  "Mi60+": {
+   "archivo": "mi60.png",
+   "color": "#573624",
+   "etiqueta": "Mi60+"
+  },
+  "Servicio de Atención Rural - SAR": {
+   "archivo": "servicio-de-atencion-rural-sar.png",
+   "color": "#ba0d15",
+   "etiqueta": "Servicio de Atención Rural - SAR"
+  },
+  "Servicio de Atención Urgente - SAU": {
+   "archivo": "servicio-de-atencion-urgente-sau.png",
+   "color": "#3d3c3b",
+   "etiqueta": "Servicio de Atención Urgente - SAU"
+  },
+  "Unidad de Adopción - UA": {
+   "archivo": "unidad-de-adopcion-ua.png",
+   "color": "#b93f4d",
+   "etiqueta": "Unidad de Adopción - UA"
+  },
+  "Unidad de Protección Especial - UPE": {
+   "archivo": "unidad-de-proteccion-especial-upe.png",
+   "color": "#aa545a",
+   "etiqueta": "Unidad de Protección Especial - UPE"
+  },
+  "Acercándonos": {
+   "sigla": "ACE",
+   "color": "#0f766e",
+   "etiqueta": "Acercándonos"
+  },
+  "Centro Comunal Familiar": {
+   "sigla": "CCF",
+   "color": "#7c3aed",
+   "etiqueta": "Centro Comunal Familiar"
+  },
+  "Centro de Recreación Familiar": {
+   "sigla": "CRF",
+   "color": "#b45309",
+   "etiqueta": "Centro de Recreación Familiar"
+  },
+  "Plataforma de Atención": {
+   "sigla": "PA",
+   "color": "#0369a1",
+   "etiqueta": "Plataforma de Atención"
+  },
+  "SAIPD": {
+   "sigla": "SAIPD",
+   "color": "#9d174d",
+   "etiqueta": "SAIPD"
+  }
+ }
+}
