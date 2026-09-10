@@ -64,8 +64,16 @@ El repositorio incluye `.github/workflows/deploy.yml`, que publica la carpeta `a
 en cada push a `main`.
 
 1. Sube el repositorio a GitHub.
-2. Ve a **Settings › Pages** y en *Source* elige **GitHub Actions**.
-3. Haz push a `main`. La acción publica el sitio y muestra la URL.
+2. Haz push a `main`. El workflow habilita Pages solo (`enablement: true`) y publica
+   el sitio; la URL aparece en el resumen de la acción y en **Settings › Pages**.
+
+> **Si la acción falla con `Get Pages site failed … Error: Not Found`**, es que Pages
+> todavía no está activado y el repositorio no permite activarlo por API. Ve a
+> **Settings › Pages**, en *Source* elige **GitHub Actions**, y vuelve a lanzar el
+> workflow desde la pestaña *Actions* (*Re-run jobs*).
+>
+> En repositorios **privados**, Pages requiere un plan de pago; con la cuenta gratuita
+> hay que hacer público el repositorio.
 
 <details>
 <summary>Alternativa sin Actions</summary>

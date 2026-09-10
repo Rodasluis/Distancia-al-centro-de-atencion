@@ -1,6 +1,8 @@
 # Publica la carpeta app/ en GitHub Pages en cada push a main.
 #
-# Requisito: en Settings › Pages, elegir «Source: GitHub Actions».
+# La primera vez, «configure-pages» habilita Pages por API gracias a
+# enablement: true. Si tu plan o los permisos del repositorio no lo permiten,
+# actívalo a mano en Settings › Pages › Source: GitHub Actions.
 name: Desplegar en GitHub Pages
 
 on:
@@ -24,15 +26,20 @@ jobs:
       name: github-pages
       url: ${{ steps.despliegue.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
+        with:
+          # Crea la configuración de Pages si el repositorio aún no la tiene.
+          enablement: true
 
       # Los datos ya están versionados en app/data, así que no hace falta
       # reconstruirlos: se publica la carpeta tal cual.
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: app
+          # app/.nojekyll empieza por punto y si no se incluye no se sube.
+          include-hidden-files: true
 
       - id: despliegue
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
