@@ -1,0 +1,22 @@
+{
+  "name": "servicios-mimp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Consulta y localización de los centros de atención del MIMP (Perú). Sitio estático para GitHub Pages.",
+  "type": "module",
+  "scripts": {
+    "fetch:geo": "node tools/fetch-geo.mjs",
+    "build:data": "node --max-old-space-size=4096 tools/build-data.mjs .cache/geo",
+    "build:geo": "node --max-old-space-size=6144 tools/build-geo.mjs .cache/geo",
+    "build": "npm run fetch:geo && npm run build:data && npm run build:geo",
+    "start": "npx --yes http-server app -p 8080 -c-1 -o"
+  },
+  "devDependencies": {
+    "topojson-client": "^3.1.0",
+    "topojson-server": "^3.0.1",
+    "topojson-simplify": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

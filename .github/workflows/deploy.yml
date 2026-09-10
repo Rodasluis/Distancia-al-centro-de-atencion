@@ -1,0 +1,38 @@
+# Publica la carpeta app/ en GitHub Pages en cada push a main.
+#
+# Requisito: en Settings › Pages, elegir «Source: GitHub Actions».
+name: Desplegar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # Los datos ya están versionados en app/data, así que no hace falta
+      # reconstruirlos: se publica la carpeta tal cual.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+      - id: despliegue
+        uses: actions/deploy-pages@v4
