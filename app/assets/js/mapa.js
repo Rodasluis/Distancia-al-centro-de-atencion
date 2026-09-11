@@ -31,6 +31,30 @@ const MAX_ZOOM_NATIVO = 16;
 
 /** Hasta este número de resultados, los marcadores no se agrupan. */
 const SIN_AGRUPAR_HASTA = 25;
+
+/**
+ * Desde este zoom los marcadores dejan de agruparse.
+ *
+ * Se midió cuántos centros caen en la misma celda del tamaño del icono:
+ * a z5 el 88 % se solapa (140 apilados en Breña), a z8 el 62 %, y recién
+ * desde z11 baja al 36 % con un máximo de 8 por celda. Por debajo de ese
+ * zoom agrupar es inevitable; por encima, estorba.
+ */
+const ZOOM_SIN_AGRUPAR = 11;
+
+/**
+ * Tamaño del marcador según el zoom. Pequeño en vista nacional, donde sólo
+ * importa dónde hay centros, y grande al acercarse, donde el icono debe
+ * poder distinguirse.
+ */
+const TAMANOS = [
+  { hasta: 7, px: 18 },
+  { hasta: 9, px: 22 },
+  { hasta: 11, px: 26 },
+  { hasta: 13, px: 30 },
+  { hasta: Infinity, px: 34 },
+];
+const tamanoParaZoom = (z) => TAMANOS.find((t) => z <= t.hasta).px;
 const ATRIBUCION =
   'Mapa base &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, '
   + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> y la comunidad SIG';
@@ -77,25 +101,28 @@ export class MapaCentros {
     this.teselaRotulos = L.tileLayer(rotulos, { ...opcTesela, pane: 'rotulos' }).addTo(this.mapa);
 
     this.capaLimites = null;
+    this.rendererLimites = L.svg({ pane: 'limites' });
     this.capaRadio = L.layerGroup().addTo(this.mapa);
 
     this.grupo = L.markerClusterGroup({
       maxClusterRadius: 46,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
-      disableClusteringAtZoom: 15,
+      disableClusteringAtZoom: ZOOM_SIN_AGRUPAR,
       chunkedLoading: true,
-      iconCreateFunction: (cluster) => {
-        const n = cluster.getChildCount();
-        const tam = n < 10 ? 34 : n < 100 ? 40 : 46;
-        const mod = n < 10 ? '' : n < 100 ? ' cluster--md' : ' cluster--lg';
-        return L.divIcon({
-          html: `<div class="cluster${mod}" style="width:${tam}px;height:${tam}px">${n}</div>`,
-          className: '', iconSize: [tam, tam],
-        });
-      },
+      iconCreateFunction: (cluster) => this.#iconoGrupo(cluster),
     });
     this.grupo.addTo(this.mapa);
+
+    // El tamaño del marcador depende del zoom, así que hay que repintarlos
+    // al terminar cada cambio de escala.
+    this.zoomActual = this.mapa.getZoom();
+    this.mapa.on('zoomend', () => {
+      const z = this.mapa.getZoom();
+      if (tamanoParaZoom(z) === tamanoParaZoom(this.zoomActual)) { this.zoomActual = z; return; }
+      this.zoomActual = z;
+      this.#redimensionarMarcadores();
+    });
 
     // Con pocos resultados agrupar estorba más que ayuda: se usa una capa
     // simple para que cada centro se vea suelto sin depender del zoom.
@@ -135,16 +162,56 @@ export class MapaCentros {
     return this._nivelLimites === 'departamentos' ? 1.2 : 0.7;
   }
 
+  /**
+   * Icono de un grupo: en vez de un globo con el número, se muestra el icono
+   * del tipo predominante con el recuento en una esquina, para no perder de
+   * vista qué clase de centros hay agrupados ahí.
+   */
+  #iconoGrupo(cluster) {
+    const n = cluster.getChildCount();
+    const porTipo = new Map();
+    for (const m of cluster.getAllChildMarkers()) {
+      const t = m.options.tipoCentro;
+      porTipo.set(t, (porTipo.get(t) || 0) + 1);
+    }
+    const [predominante] = [...porTipo].sort((a, b) => b[1] - a[1])[0];
+    const { color, html } = this.marcaDe(predominante);
+
+    // El grupo necesita un mínimo propio: con el tamaño de un pin suelto, la
+    // insignia del recuento taparía el icono en vez de acompañarlo.
+    const base = tamanoParaZoom(this.zoomActual ?? this.mapa.getZoom());
+    const tam = Math.round(Math.max(34, base * (n < 10 ? 1.2 : n < 100 ? 1.35 : 1.5)));
+
+    return L.divIcon({
+      html: `<div class="grupo" style="--pin-color:${color};width:${tam}px;height:${tam}px">
+               ${html}
+               <span class="grupo__n">${n > 999 ? '999+' : n}</span>
+             </div>`,
+      className: '',
+      iconSize: [tam, tam],
+    });
+  }
+
   /* -------------------------------------------------------- marcador -- */
   #icono(centro, activo) {
     const { color, html } = this.marcaDe(centro.tipo);
+    const tam = tamanoParaZoom(this.zoomActual ?? this.mapa.getZoom());
     return L.divIcon({
       html: `<div class="pin${activo ? ' pin--activo' : ''}" style="--pin-color:${color}">${html}</div>`,
       className: '',
-      iconSize: [28, 28],
-      iconAnchor: [14, 32],
-      popupAnchor: [0, -30],
+      iconSize: [tam, tam],
+      iconAnchor: [tam / 2, tam + 4],
+      popupAnchor: [0, -tam - 2],
     });
+  }
+
+  /** Repinta los iconos tras cruzar un umbral de tamaño. */
+  #redimensionarMarcadores() {
+    for (const [id, { marcador, centro }] of this.marcadores) {
+      marcador.setIcon(this.#icono(centro, id === this.seleccionado));
+    }
+    // Los grupos se regeneran solos al refrescar sus iconos.
+    if (this.mapa.hasLayer(this.grupo)) this.grupo.refreshClusters();
   }
 
   /** Redibuja los marcadores para la lista de centros dada. */
@@ -160,6 +227,7 @@ export class MapaCentros {
         alt: `${c.nombre}, ${c.dist}`,
         keyboard: true,
         riseOnHover: true,
+        tipoCentro: c.tipo,   // lo lee #iconoGrupo para elegir el icono del grupo
       });
       m.on('click', () => this.manejadores.alSeleccionar(c.id));
       m.on('keypress', (e) => {
@@ -273,11 +341,24 @@ export class MapaCentros {
     const estilo = this.#estiloLimite();
     this.capaLimites = L.geoJSON(datos, {
       pane: 'limites',
+      // SVG en lugar del canvas del mapa: nunca se cargan más de ~180
+      // polígonos a la vez (los distritos de un departamento), y con
+      // elementos reales el clic y el resaltado son fiables.
+      renderer: this.rendererLimites,
       style: () => estilo,
       onEachFeature: (f, capa) => {
-        capa.bindTooltip(f.properties.nombre, { sticky: true, direction: 'top', opacity: .95 });
+        const nombre = f.properties.nombre;
+        capa.bindTooltip(`${nombre}<span class="tooltip__pista">Clic para ver sus centros</span>`, {
+          sticky: true, direction: 'top', opacity: .95, className: 'tooltip-territorio',
+        });
         capa.on('mouseover', () => capa.setStyle({ fillOpacity: .17, weight: estilo.weight + 1 }));
         capa.on('mouseout', () => capa.setStyle(estilo));
+        // Clic en el territorio: baja un nivel en los filtros. Los marcadores
+        // viven en un pane superior, así que sus clics no llegan hasta aquí.
+        capa.on('click', (e) => {
+          L.DomEvent.stop(e);
+          this.manejadores.alElegirTerritorio?.(f.properties.ubigeo, nombre);
+        });
       },
     }).addTo(this.mapa);
 

@@ -278,6 +278,7 @@ img { max-width: 100%; }
 
 /* ------------------------------------------------------------- layout -- */
 .layout {
+  position: relative;   /* ancla de .ficha--flotante */
   display: grid;
   grid-template-columns: var(--panel-w) 1fr;
   flex: 1;
@@ -510,20 +511,45 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   box-shadow: 0 0 0 3px rgba(28, 126, 214, .32), 0 2px 6px rgba(0, 0, 0, .4);
 }
 
-.cluster {
+/* Grupo de centros: el icono del tipo predominante con el recuento en una
+   esquina, en lugar de un globo con un número suelto. */
+.grupo {
+  position: relative;
   display: grid; place-items: center;
-  font-size: 12px; font-weight: 700; color: #fff;
-  background: color-mix(in srgb, var(--mimp) 86%, transparent);
-  border: 2px solid rgba(255, 255, 255, .85);
   border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
+  background: #fff;
+  border: 2.5px solid var(--pin-color, var(--mimp));
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .3);
 }
-.cluster--md { font-size: 13px; }
-.cluster--lg { font-size: 14px; }
+.grupo img { width: 60%; height: 60%; object-fit: contain; }
+.grupo .pin__sigla { font-size: 9px; font-weight: 800; color: var(--pin-color, var(--mimp)); }
+
+.grupo__n {
+  position: absolute; right: -4px; bottom: -3px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: grid; place-items: center;
+  font-size: 9.5px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff; background: var(--mimp);
+  border: 1.5px solid #fff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .grupo__n { color: #24101b; }
+}
+:root[data-tema="oscuro"] .grupo__n { color: #24101b; }
+
+/* pista de «clic para filtrar» en los límites */
+.tooltip-territorio { font-weight: 600; }
+.tooltip__pista {
+  display: block; margin-top: 2px;
+  font-size: 10.5px; font-weight: 500; opacity: .7;
+}
 
 /* leyenda de capas */
+/* A la izquierda: a la derecha chocaría con la ficha flotante. */
 .mapa__leyenda {
-  position: absolute; z-index: 500; right: 10px; top: 10px;
+  position: absolute; z-index: 500; left: 10px; top: 10px;
   background: var(--superficie);
   border: 1px solid var(--borde); border-radius: var(--r-sm);
   box-shadow: var(--sombra-2); overflow: hidden;
@@ -567,6 +593,38 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   border-left: 1px solid var(--borde);
   box-shadow: var(--sombra-3);
   animation: entrar-der .2s cubic-bezier(.22, .8, .3, 1);
+}
+
+/* --- ficha flotante: tarjeta suspendida sobre el mapa ------------------
+   Va dentro de .layout, así que se limita al área de contenido en lugar de
+   ocupar toda la ventana. No captura los clics del mapa: sólo la propia
+   tarjeta es interactiva, y el mapa se puede seguir moviendo con ella
+   abierta. Su alto se ajusta al contenido, sin estirarse de arriba abajo. */
+.ficha--flotante { position: absolute; pointer-events: none; }
+.ficha--flotante .ficha__fondo { display: none; }
+
+.ficha--flotante .ficha__panel {
+  pointer-events: auto;
+  top: 14px; right: 14px; bottom: auto; left: auto;
+  width: min(410px, calc(100% - 28px));
+  max-height: calc(100% - 28px);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 34px rgba(16, 18, 24, .22), 0 2px 8px rgba(16, 18, 24, .12);
+  animation: entrar-flotante .2s cubic-bezier(.22, .8, .3, 1);
+  overflow: hidden;   /* para que el redondeo recorte cabecera y pie */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .ficha--flotante .ficha__panel {
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .4);
+  }
+}
+:root[data-tema="oscuro"] .ficha--flotante .ficha__panel {
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .4);
+}
+
+@keyframes entrar-flotante {
+  from { transform: translate(10px, -6px) scale(.98); opacity: 0; }
 }
 .ficha__panel--centro {
   right: 50%; top: 50%; bottom: auto;
@@ -638,17 +696,6 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 .dato__val a { font-weight: 600; text-decoration: none; }
 .dato__val a:hover { text-decoration: underline; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 9px; border-radius: 999px;
-  font-size: 11.5px; font-weight: 600;
-  background: var(--superficie-2); color: var(--tinta-2);
-  border: 1px solid var(--borde);
-}
-.chip--si { background: var(--exito-suave); color: var(--exito);
-            border-color: color-mix(in srgb, var(--exito) 25%, transparent); }
-.chip--no { background: var(--superficie-2); color: var(--tinta-3); text-decoration: line-through; }
 
 .nota {
   display: flex; gap: 8px; align-items: flex-start;
@@ -753,6 +800,19 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
     max-height: 88dvh;
     border-left: 0; border-top: 1px solid var(--borde);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
+    animation: entrar-abajo .22s cubic-bezier(.22, .8, .3, 1);
+  }
+
+  /* En móvil no hay sitio para una tarjeta flotante: vuelve a ser una hoja
+     inferior modal, cubriendo la ventana y con fondo oscurecido. */
+  .ficha--flotante { position: fixed; inset: 0; pointer-events: auto; }
+  .ficha--flotante .ficha__fondo { display: block; }
+  .ficha--flotante .ficha__panel {
+    top: auto; right: 0; left: 0; bottom: 0;
+    width: 100%; max-height: 88dvh;
+    border: 0; border-top: 1px solid var(--borde);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: var(--sombra-3);
     animation: entrar-abajo .22s cubic-bezier(.22, .8, .3, 1);
   }
   .ficha__panel--centro {

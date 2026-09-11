@@ -273,6 +273,15 @@ function refrescar({ moverMapa = false } = {}) {
 /** Código del territorio seleccionado, en el nivel más fino elegido. */
 const territorioActual = () => estado.dist || estado.prov || estado.dep || '';
 
+/** Mensaje pasajero en la franja de avisos; el próximo refresco lo sustituye. */
+let temporizadorAviso;
+function avisoTemporal(texto) {
+  clearTimeout(temporizadorAviso);
+  el.aviso.textContent = texto;
+  el.aviso.hidden = false;
+  temporizadorAviso = setTimeout(() => refrescar(), 5000);
+}
+
 /**
  * Elige la capa de límites. En modo «auto» el detalle acompaña al filtro:
  * sin filtro se ven los departamentos; con departamento, sus provincias;
@@ -292,6 +301,44 @@ async function sincronizarLimites() {
   if ((nivel === 'provincias' || nivel === 'distritos') && !ccdd) nivel = 'departamentos';
 
   await mapa.mostrarLimites(nivel, ccdd);
+}
+
+/**
+ * Clic sobre un territorio del mapa: fija el filtro correspondiente según la
+ * longitud del ubigeo (2 = departamento, 4 = provincia, 6 = distrito) y baja
+ * un nivel. Volver a pulsar el territorio ya seleccionado sube un nivel, para
+ * poder retroceder sin tocar los desplegables.
+ */
+async function seleccionarTerritorio(ubigeo, nombre) {
+  // Los desplegables sólo listan territorios con centros, así que seleccionar
+  // uno vacío se descartaría en silencio. Se encuadra igual y se explica.
+  const campo = ubigeo.length === 2 ? 'ccdd' : ubigeo.length === 4 ? 'ccpp' : 'ubigeo';
+  if (!DIR.centros.some((c) => c[campo] === ubigeo)) {
+    await mapa.encuadrarTerritorio(ubigeo);
+    avisoTemporal(`${nombre} no tiene centros de atención registrados en el directorio.`);
+    return;
+  }
+
+  const yaSeleccionado = territorioActual() === ubigeo;
+
+  if (ubigeo.length === 2) {
+    estado.dep = yaSeleccionado ? '' : ubigeo;
+    estado.prov = ''; estado.dist = '';
+  } else if (ubigeo.length === 4) {
+    estado.dep = ubigeo.slice(0, 2);
+    estado.prov = yaSeleccionado ? '' : ubigeo;
+    estado.dist = '';
+  } else {
+    estado.dep = ubigeo.slice(0, 2);
+    estado.prov = ubigeo.slice(0, 4);
+    estado.dist = yaSeleccionado ? '' : ubigeo;
+  }
+
+  // Los desplegables deben reflejar lo que se acaba de pulsar en el mapa.
+  el.dep.value = estado.dep;
+  llenarProvincias();
+  llenarDistritos();
+  await aplicarTerritorio();
 }
 
 /** Recalcula capas y encuadre tras cambiar un filtro territorial. */
@@ -554,7 +601,10 @@ async function iniciar() {
     return;
   }
 
-  mapa = new MapaCentros('mapa', { alSeleccionar: abrirFicha }, ICONOS);
+  mapa = new MapaCentros('mapa', {
+    alSeleccionar: abrirFicha,
+    alElegirTerritorio: seleccionarTerritorio,
+  }, ICONOS);
   mapa.aplicarTema(temaOscuroActivo());
 
   llenarDepartamentos();

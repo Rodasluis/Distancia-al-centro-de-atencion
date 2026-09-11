@@ -21,8 +21,10 @@ Contiene **704 centros de atención físicos** repartidos por los 25 departament
 | **Tipo de centro** | 20 tipos: CEM, CAR, CEDIF, UPE, SAR, CAD, CARPAM, SAU… |
 | **Búsqueda libre** | Por nombre, dirección, responsable o código, ignorando tildes. |
 | **Mapa interactivo** | Límites departamentales, provinciales y distritales del Perú. El detalle sigue al filtro y el mapa hace zoom automático al territorio elegido, que queda remarcado. |
-| **Iconos por tipo** | Cada tipo de centro usa su icono oficial del MIMP; los que la clasificación no cubre llevan un marcador con su sigla y color propios. |
-| **Ficha detallada** | Dirección, responsable, teléfono, modalidad, servicios básicos del local, ubigeo y coordenadas. |
+| **Navegar por el mapa** | Clic sobre un departamento, provincia o distrito para bajar de nivel; volver a pulsarlo sube. Los desplegables se sincronizan solos. |
+| **Iconos por tipo** | Cada tipo de centro usa su icono oficial del MIMP; los que la clasificación no cubre llevan un marcador con su sigla y color propios. El tamaño crece con el zoom. |
+| **Agrupación** | Sólo por debajo del nivel de provincia, donde la densidad lo exige. El globo muestra el icono del tipo predominante con el recuento, no un número suelto. |
+| **Ficha detallada** | Tarjeta flotante sobre el mapa con dirección, responsable, teléfono y modalidad; el mapa sigue siendo manejable con ella abierta. |
 | **Cómo llegar** | Abre la ruta en Google Maps desde tu ubicación. |
 | **Enlace compartible** | El estado de la búsqueda se guarda en la URL. |
 

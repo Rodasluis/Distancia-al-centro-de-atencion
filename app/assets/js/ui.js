@@ -92,10 +92,6 @@ const AVISOS_CALIDAD = {
     + 'Confirma la dirección por teléfono antes de desplazarte.',
 };
 
-const ETIQUETAS_EQUIP = {
-  telefono: 'Teléfono', internet: 'Internet', luz: 'Luz', agua: 'Agua', desague: 'Desagüe',
-};
-
 /** Devuelve el HTML del cuerpo y del pie de la ficha de un centro. */
 export function construirFicha(c, origen) {
   const dato = (icono, etiqueta, valor) => `
@@ -148,17 +144,6 @@ export function construirFicha(c, origen) {
       '<span style="color:var(--tinta-3)">No registrado en el directorio</span>'));
   }
 
-  /* Servicios básicos del local. Se declaran también los no registrados:
-     mostrar sólo los conocidos daría a entender que el resto no existe. */
-  const conocidos = Object.entries(c.equip).filter(([, v]) => v !== null);
-  const desconocidos = Object.entries(c.equip).filter(([, v]) => v === null).map(([k]) => ETIQUETAS_EQUIP[k]);
-  const equip = conocidos
-    .map(([k, v]) => `<span class="chip chip--${v ? 'si' : 'no'}">${v ? '✓' : '✕'} ${esc(ETIQUETAS_EQUIP[k])}</span>`)
-    .join('');
-  const equipNota = desconocidos.length
-    ? `<p class="hint" style="margin-top:7px">Sin dato registrado sobre: ${esc(desconocidos.join(', ').toLowerCase())}.</p>`
-    : '';
-
   const cuerpo = `
     ${resumen}
     ${htmlAvisos}
@@ -188,21 +173,6 @@ export function construirFicha(c, origen) {
       </div>
     </section>
 
-    ${equip ? `
-    <section class="bloque">
-      <h3 class="bloque__titulo">Servicios básicos del local</h3>
-      <div class="chips">${equip}</div>
-      ${equipNota}
-    </section>` : ''}
-
-    <section class="bloque">
-      <h3 class="bloque__titulo">Identificación</h3>
-      <div class="datos">
-        ${c.codigo ? dato(ICONOS.etiqueta, 'Código del centro', esc(c.codigo)) : ''}
-        ${dato(ICONOS.etiqueta, 'Ubigeo', esc(c.ubigeo))}
-        ${dato(ICONOS.pin, 'Coordenadas',
-          `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`)}
-      </div>
     </section>`;
 
   const enlaceTel = c.telefono
