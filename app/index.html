@@ -81,6 +81,12 @@
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="m2 11 20-8-8 20-2.5-8.5L2 11Z"/></svg>
       <span id="btn-geo-txt">Usar mi ubicación</span>
     </button>
+    <!-- Alternativa para dispositivos con la ubicación bloqueada o sin
+         servicio de localización: sólo aparece si la detección falla. -->
+    <button class="btn btn--ghost" id="btn-punto" type="button" hidden>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+      <span id="btn-punto-txt">Marcar en el mapa</span>
+    </button>
     <button class="btn btn--ghost" id="btn-limpiar" type="button">Limpiar</button>
   </div>
 </form>
@@ -122,6 +128,11 @@
     <!-- Ruta territorial: indica dónde estás y permite volver a cualquier
          nivel, que si no sólo se sale con «Limpiar». -->
     <nav class="migas" id="migas" aria-label="Territorio seleccionado"></nav>
+
+    <p class="pista-punto" id="pista-punto" role="status" hidden>
+      Toca el mapa para marcar tu ubicación
+      <button class="pista-punto__cancelar" type="button" id="btn-cancelar-punto">Cancelar</button>
+    </p>
 
   </main>
 

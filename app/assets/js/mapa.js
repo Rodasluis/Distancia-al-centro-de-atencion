@@ -149,6 +149,29 @@ export class MapaCentros {
     // Con pocos resultados agrupar estorba más que ayuda: se usa una capa
     // simple para que cada centro se vea suelto sin depender del zoom.
     this.grupoSimple = L.layerGroup().addTo(this.mapa);
+
+    this.modoPunto = false;
+    this.mapa.on('click', (e) => this.#puntoElegido(e));
+  }
+
+  /**
+   * Modo «marcar mi ubicación»: para quien tiene la geolocalización bloqueada
+   * o no disponible. Mientras está activo, cualquier pulsación sobre el mapa
+   * fija el punto en lugar de seleccionar territorio o abrir una ficha.
+   */
+  activarModoPunto(activo) {
+    this.modoPunto = activo;
+    document.body.classList.toggle('modo-punto', activo);
+    this.manejadores.alCambiarModoPunto?.(activo);
+  }
+
+  /** Consume la pulsación si se está marcando la ubicación. */
+  #puntoElegido(e) {
+    if (!this.modoPunto) return false;
+    L.DomEvent.stop(e);
+    this.activarModoPunto(false);
+    this.manejadores.alElegirPunto?.({ lat: e.latlng.lat, lon: e.latlng.lng });
+    return true;
   }
 
   /** Marca visual de un tipo de centro: icono del libro del MIMP, o su sigla. */
@@ -299,7 +322,10 @@ export class MapaCentros {
         ccppCentro: c.ccpp,
         ubigeoCentro: c.ubigeo,
       });
-      m.on('click', () => this.manejadores.alSeleccionar(c.id));
+      m.on('click', (e) => {
+        if (this.#puntoElegido(e)) return;    // se está marcando la ubicación
+        this.manejadores.alSeleccionar(c.id);
+      });
       m.on('keypress', (e) => {
         if (e.originalEvent.key === 'Enter') this.manejadores.alSeleccionar(c.id);
       });
@@ -475,6 +501,7 @@ export class MapaCentros {
         // Clic en el territorio: baja un nivel en los filtros. Los marcadores
         // viven en un pane superior, así que sus clics no llegan hasta aquí.
         capa.on('click', (e) => {
+          if (this.#puntoElegido(e)) return;   // se está marcando la ubicación
           L.DomEvent.stop(e);
           this.manejadores.alElegirTerritorio?.(f.properties.ubigeo, nombre);
         });

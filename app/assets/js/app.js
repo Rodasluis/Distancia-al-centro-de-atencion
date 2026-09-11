@@ -30,6 +30,10 @@ const el = {
   btnGeo: $('#btn-geo'),
   btnGeoTxt: $('#btn-geo-txt'),
   btnQuitarUbicacion: $('#btn-quitar-ubicacion'),
+  btnPunto: $('#btn-punto'),
+  btnPuntoTxt: $('#btn-punto-txt'),
+  btnCancelarPunto: $('#btn-cancelar-punto'),
+  pistaPunto: $('#pista-punto'),
   btnLimpiar: $('#btn-limpiar'),
   btnTema: $('#btn-tema'),
   btnAyuda: $('#btn-ayuda'),
@@ -57,6 +61,8 @@ let DIR = null;
 let ICONOS = null;
 /** Marca que el radio se soltó solo para no dejar el territorio sin resultados. */
 let radioSoltadoPorTerritorio = false;
+/** Tipo de centro que se descartó por no existir en el territorio elegido. */
+let tipoDescartado = null;
 let mapa = null;
 let ultimaLista = [];
 let ultimoFoco = null;
@@ -185,12 +191,36 @@ function llenarDistritos() {
   else { estado.dist = ''; el.dist.value = ''; }
 }
 
+/** ¿Cae el centro dentro del territorio elegido ahora mismo? */
+const enTerritorio = (c) =>
+  (!estado.dep || c.ccdd === estado.dep)
+  && (!estado.prov || c.ccpp === estado.prov)
+  && (!estado.dist || c.ubigeo === estado.dist);
+
+/**
+ * Los tipos de centro se recalculan con cada cambio territorial: sólo se
+ * ofrecen los que existen en el territorio elegido. Listar un tipo sin
+ * ninguna sede allí lleva a una búsqueda vacía sin motivo aparente.
+ */
 function llenarTipos() {
   const cuenta = new Map();
-  for (const c of DIR.centros) cuenta.set(c.tipo, (cuenta.get(c.tipo) || 0) + 1);
-  el.tipo.replaceChildren(opcion('', 'Todos los servicios'));
+  let total = 0;
+  for (const c of DIR.centros) {
+    if (!enTerritorio(c)) continue;
+    cuenta.set(c.tipo, (cuenta.get(c.tipo) || 0) + 1);
+    total++;
+  }
+
+  el.tipo.replaceChildren(opcion('', `Todos los tipos (${total})`));
   for (const t of DIR.catalogo.tipos) {
-    el.tipo.appendChild(opcion(t, `${t} (${cuenta.get(t) || 0})`));
+    if (cuenta.has(t)) el.tipo.appendChild(opcion(t, `${t} (${cuenta.get(t)})`));
+  }
+
+  // Si el tipo elegido no existe aquí se descarta, pero se avisa: callarlo
+  // haría parecer que el filtro se ha perdido solo.
+  if (estado.tipo && !cuenta.has(estado.tipo)) {
+    tipoDescartado = estado.tipo;
+    estado.tipo = '';
   }
   el.tipo.value = estado.tipo;
 }
@@ -260,6 +290,13 @@ function refrescar({ moverMapa = false } = {}) {
     radioSoltadoPorTerritorio = false;
   } else if (notas.length) {
     notas.push('Amplía el radio o quita tu ubicación para verlos todos.');
+  }
+  // Va el primero y sobrevive a lo anterior: explica un cambio que el usuario
+  // no ha pedido, así que es lo que más necesita leer.
+  if (tipoDescartado) {
+    notas.unshift(`«${tipoDescartado}» no tiene sedes en este territorio, `
+      + 'así que se quitó ese filtro.');
+    tipoDescartado = null;
   }
   el.aviso.textContent = notas.join(' ');
   el.aviso.hidden = notas.length === 0;
@@ -400,6 +437,7 @@ async function seleccionarTerritorio(ubigeo, nombre, { alternar = true } = {}) {
 
 /** Recalcula capas y encuadre tras cambiar un filtro territorial. */
 async function aplicarTerritorio() {
+  llenarTipos();            // los tipos disponibles dependen del territorio
   await sincronizarLimites();
   refrescar();
   // El encuadre territorial manda sobre el del radio: el usuario acaba de
@@ -498,9 +536,24 @@ function usarMiUbicacion() {
   pedirGeolocalizacion();
 }
 
+/**
+ * Deja a la vista la alternativa manual. Sólo aparece cuando hace falta: si
+ * la detección automática funciona, un segundo botón sería ruido.
+ */
+function ofrecerMarcarEnMapa() {
+  el.btnPunto.hidden = false;
+}
+
+/** Entra o sale del modo de marcar la ubicación pulsando el mapa. */
+function marcarEnMapa(activo) {
+  mapa.activarModoPunto(activo);
+  if (activo && window.matchMedia('(max-width: 860px)').matches) cambiarVista('mapa');
+}
+
 function pedirGeolocalizacion() {
   if (!('geolocation' in navigator)) {
-    estadoUbicacion('Tu navegador no permite geolocalización.', 'is-error');
+    estadoUbicacion('Este dispositivo no ofrece servicio de ubicación.', 'is-error');
+    ofrecerMarcarEnMapa();
     return;
   }
   el.btnGeo.disabled = true;
@@ -529,7 +582,8 @@ function pedirGeolocalizacion() {
       };
       const texto = motivos[err.code] || 'No se pudo obtener tu ubicación.';
       estadoUbicacion(texto, 'is-error');
-      // Sin ubicación no hay ranking por cercanía: se explica en los resultados.
+      // Sin detección automática queda la vía manual: marcar el punto.
+      ofrecerMarcarEnMapa();
       if (err.code === 1) avisoTemporal(texto);
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
@@ -560,6 +614,9 @@ function quitarOrigen() {
   el.orden.value = 'nombre';
   el.radioControl.hidden = true;
   el.btnGeoTxt.textContent = 'Usar mi ubicación';
+  el.btnPuntoTxt.textContent = 'Marcar en el mapa';
+  mapa?.estadoBotonUbicacion('');
+  if (mapa?.modoPunto) marcarEnMapa(false);
   estadoUbicacion('Activa tu ubicación para ordenar los centros por cercanía.');
   refrescar({ moverMapa: true });
 }
@@ -615,6 +672,8 @@ function conectarEventos() {
 
   el.btnGeo.addEventListener('click', usarMiUbicacion);
   el.btnQuitarUbicacion.addEventListener('click', quitarOrigen);
+  el.btnPunto.addEventListener('click', () => marcarEnMapa(!mapa.modoPunto));
+  el.btnCancelarPunto.addEventListener('click', () => marcarEnMapa(false));
 
   /* ruta territorial: volver a cualquier nivel anterior */
   el.migas.addEventListener('click', async (e) => {
@@ -675,7 +734,8 @@ function conectarEventos() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!el.ficha.hidden) cerrarFicha();
+    if (mapa.modoPunto) marcarEnMapa(false);
+    else if (!el.ficha.hidden) cerrarFicha();
     else if (!el.acerca.hidden) cerrarAcerca();
   });
 
@@ -725,6 +785,14 @@ async function iniciar() {
     alSeleccionar: abrirFicha,
     alElegirTerritorio: seleccionarTerritorio,
     alPedirUbicacion: usarMiUbicacion,
+    alElegirPunto: (p) => {
+      el.btnPuntoTxt.textContent = 'Mover mi punto';
+      fijarOrigen({ ...p, fuente: 'mapa' }, 'Ubicación marcada en el mapa');
+    },
+    alCambiarModoPunto: (activo) => {
+      el.pistaPunto.hidden = !activo;
+      el.btnPunto.setAttribute('aria-pressed', String(activo));
+    },
     alCargarCapa: (cargando) => document.body.classList.toggle('cargando-capa', cargando),
     alRecuperarTamano: () => { if (estado.seleccionado == null) encuadrarSegunEstado(); },
   }, ICONOS);

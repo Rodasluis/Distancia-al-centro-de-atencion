@@ -197,6 +197,27 @@ botón *Cómo llegar* deriva el trayecto real a Google Maps.
 
 ---
 
+## Filtros
+
+Los desplegables territoriales encadenan departamento → provincia → distrito, y el de
+tipo de centro se recalcula con cada cambio: sólo ofrece los tipos con sedes en el
+territorio elegido, con su recuento. Si el tipo seleccionado deja de existir al cambiar de
+territorio, se descarta y se indica el motivo en los resultados.
+
+---
+
+## Origen de la búsqueda por cercanía
+
+El origen procede de la API de geolocalización del navegador. Cuando la detección
+automática falla —permiso denegado, dispositivo sin servicio de localización o tiempo de
+espera agotado— la interfaz ofrece marcar el punto directamente sobre el mapa; el resto de
+la aplicación se comporta igual, con el mismo ranking, radio y estimaciones de trayecto.
+
+Mientras el modo de marcado está activo, las pulsaciones sobre el mapa fijan el punto en
+lugar de seleccionar territorio o abrir una ficha. Se cancela con `Escape`.
+
+---
+
 ## Privacidad
 
 La ubicación se obtiene mediante la API de geolocalización del navegador y se utiliza

@@ -601,6 +601,34 @@ body.cargando-capa .mapa-wrap::before {
   transition: transform 1.6s cubic-bezier(.1, .8, .3, 1), opacity .1s;
 }
 
+/* ------------------------------- marcar la ubicación sobre el mapa -- */
+body.modo-punto .leaflet-container,
+body.modo-punto .leaflet-interactive,
+body.modo-punto .leaflet-marker-icon { cursor: crosshair !important; }
+
+.pista-punto {
+  position: absolute; z-index: 600; left: 50%; top: 12px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px 8px 13px;
+  font-size: 13px; font-weight: 600;
+  color: #fff; background: var(--mimp);
+  border-radius: 999px; box-shadow: var(--sombra-2);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .pista-punto { color: #24101b; }
+}
+:root[data-tema="oscuro"] .pista-punto { color: #24101b; }
+
+.pista-punto__cancelar {
+  padding: 3px 10px;
+  font: inherit; font-size: 12px; font-weight: 650;
+  color: inherit; background: rgba(255, 255, 255, .22);
+  border: 0; border-radius: 999px; cursor: pointer;
+}
+.pista-punto__cancelar:hover { background: rgba(255, 255, 255, .34); }
+
 /* ------------------------------------------- ruta territorial (migas) -- */
 .migas {
   position: absolute; z-index: 500; left: 10px; top: 10px;
