@@ -110,9 +110,15 @@ export class MapaCentros {
       showCoverageOnHover: false,
       disableClusteringAtZoom: ZOOM_SIN_AGRUPAR,
       chunkedLoading: true,
+      zoomToBoundsOnClick: false,   // lo gestiona #alPulsarGrupo
       iconCreateFunction: (cluster) => this.#iconoGrupo(cluster),
     });
     this.grupo.addTo(this.mapa);
+
+    // Pulsar un grupo baja de nivel territorial igual que pulsar el mapa: si
+    // sólo se limitara a acercar, el usuario quedaría con los límites
+    // departamentales fuera de pantalla y sin nada que pulsar.
+    this.grupo.on('clusterclick', (e) => this.#alPulsarGrupo(e.layer));
 
     // El tamaño del marcador depende del zoom, así que hay que repintarlos
     // al terminar cada cambio de escala.
@@ -192,6 +198,24 @@ export class MapaCentros {
     });
   }
 
+  /**
+   * Al pulsar un grupo se baja al territorio común de todos sus centros: el
+   * distrito si comparten distrito, si no la provincia, si no el departamento.
+   * Cuando abarca varios departamentos no hay territorio común y sólo se
+   * acerca; al separarse el grupo, el siguiente clic ya podrá resolverlo.
+   */
+  #alPulsarGrupo(grupo) {
+    const hijos = grupo.getAllChildMarkers();
+    const comun = (clave) => {
+      const v = hijos[0].options[clave];
+      return hijos.every((m) => m.options[clave] === v) ? v : null;
+    };
+    const ubigeo = comun('ubigeoCentro') || comun('ccppCentro') || comun('ccddCentro');
+
+    if (ubigeo) this.manejadores.alElegirTerritorio?.(ubigeo, null);
+    else this.mapa.fitBounds(grupo.getBounds(), { padding: [40, 40] });
+  }
+
   /* -------------------------------------------------------- marcador -- */
   #icono(centro, activo) {
     const { color, html } = this.marcaDe(centro.tipo);
@@ -205,13 +229,18 @@ export class MapaCentros {
     });
   }
 
-  /** Repinta los iconos tras cruzar un umbral de tamaño. */
+  /**
+   * Repinta los iconos tras cruzar un umbral de tamaño.
+   *
+   * No se refrescan los grupos: sólo existen por debajo de z11, donde su
+   * tamaño apenas varía (el mínimo de 34 px domina el cálculo), y llamar a
+   * refreshClusters() durante la animación de zoom del propio grupo deja los
+   * polígonos de los límites sin reposicionar.
+   */
   #redimensionarMarcadores() {
     for (const [id, { marcador, centro }] of this.marcadores) {
       marcador.setIcon(this.#icono(centro, id === this.seleccionado));
     }
-    // Los grupos se regeneran solos al refrescar sus iconos.
-    if (this.mapa.hasLayer(this.grupo)) this.grupo.refreshClusters();
   }
 
   /** Redibuja los marcadores para la lista de centros dada. */
@@ -227,7 +256,11 @@ export class MapaCentros {
         alt: `${c.nombre}, ${c.dist}`,
         keyboard: true,
         riseOnHover: true,
-        tipoCentro: c.tipo,   // lo lee #iconoGrupo para elegir el icono del grupo
+        // los lee el grupo para elegir su icono y su territorio común
+        tipoCentro: c.tipo,
+        ccddCentro: c.ccdd,
+        ccppCentro: c.ccpp,
+        ubigeoCentro: c.ubigeo,
       });
       m.on('click', () => this.manejadores.alSeleccionar(c.id));
       m.on('keypress', (e) => {
@@ -258,8 +291,32 @@ export class MapaCentros {
       // markercluster falla al perder la referencia al mapa. Basta con acercarse
       // más allá de disableClusteringAtZoom para que el marcador quede suelto.
       const zoom = Math.max(this.mapa.getZoom(), 16);
-      this.mapa.setView(act.marcador.getLatLng(), zoom, { animate: true });
+      this.centrarEnVisible(act.marcador.getLatLng(), zoom);
     }
+  }
+
+  /**
+   * Centra un punto en la parte del mapa que queda a la vista, descontando lo
+   * que tape la ficha flotante. Sin esto el centro real queda detrás de la
+   * tarjeta y el mapa parece descuadrado.
+   */
+  centrarEnVisible(latlng, zoom = this.mapa.getZoom()) {
+    const tapado = this.#anchoTapado();
+    if (!tapado) { this.mapa.setView(latlng, zoom, { animate: true }); return; }
+    // Desplazar el centro hacia la derecha deja el punto en el hueco libre.
+    const punto = this.mapa.project(latlng, zoom).add([tapado / 2, 0]);
+    this.mapa.setView(this.mapa.unproject(punto, zoom), zoom, { animate: true });
+  }
+
+  /** Píxeles de mapa que oculta la ficha flotante por la derecha. */
+  #anchoTapado() {
+    const ficha = document.querySelector('.ficha--flotante:not([hidden]) .ficha__panel');
+    if (!ficha) return 0;
+    const r = ficha.getBoundingClientRect();
+    const m = this.mapa.getContainer().getBoundingClientRect();
+    // En móvil la ficha es una hoja inferior: no tapa por el lado.
+    if (r.width >= m.width * 0.9) return 0;
+    return Math.max(0, m.right - r.left);
   }
 
   limpiarResaltado() {

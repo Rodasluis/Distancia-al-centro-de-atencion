@@ -56,6 +56,8 @@ const estado = {
 
 let DIR = null;
 let ICONOS = null;
+/** Marca que el radio se soltó solo para no dejar el territorio sin resultados. */
+let radioSoltadoPorTerritorio = false;
 let mapa = null;
 let ultimaLista = [];
 let ultimoFoco = null;
@@ -214,6 +216,22 @@ function refrescar({ moverMapa = false } = {}) {
     q: estado.q,
     orden: estado.orden,
   });
+  /*
+   * Territorio elegido + ubicación activa dejaba la pantalla en blanco: el
+   * radio por defecto (25 km) descarta todo lo que está lejos de ti, aunque
+   * sea justo lo que acabas de pedir ver. Cuando hay un filtro territorial,
+   * el radio se suelta solo en vez de vaciar el mapa.
+   */
+  if (!lista.length && estado.origen && fueraDeRadio > 0
+      && territorioActual() && RADIOS[estado.radioIdx] !== null) {
+    estado.radioIdx = RADIOS.length - 1;
+    el.radio.value = String(estado.radioIdx);
+    el.radioValor.textContent = textoRadio();
+    radioSoltadoPorTerritorio = true;
+    refrescar({ moverMapa });
+    return;
+  }
+
   ultimaLista = lista;
 
   /* encabezado */
@@ -228,7 +246,14 @@ function refrescar({ moverMapa = false } = {}) {
     notas.push(`${fueraDeRadio} ${fueraDeRadio === 1 ? 'centro queda' : 'centros quedan'} `
       + `fuera del radio de ${textoRadio().toLowerCase()}.`);
   }
-  if (notas.length) notas.push('Amplía el radio o quita tu ubicación para verlos todos.');
+  if (radioSoltadoPorTerritorio) {
+    notas.length = 0;
+    notas.push('Se quitó el límite de distancia para poder mostrarte los centros '
+      + 'del territorio que elegiste; siguen ordenados del más cercano al más lejano.');
+    radioSoltadoPorTerritorio = false;
+  } else if (notas.length) {
+    notas.push('Amplía el radio o quita tu ubicación para verlos todos.');
+  }
   el.aviso.textContent = notas.join(' ');
   el.aviso.hidden = notas.length === 0;
 
@@ -260,10 +285,8 @@ function refrescar({ moverMapa = false } = {}) {
   if (estado.seleccionado != null) mapa.resaltar(estado.seleccionado, false);
 
   if (moverMapa) {
-    if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
-    else if (estado.dist) mapa.encuadrarTerritorio('distritos', estado.dist);
-    else if (estado.prov) mapa.encuadrarTerritorio('provincias', estado.prov);
-    else if (estado.dep) mapa.encuadrarTerritorio('departamentos', estado.dep);
+    if (territorioActual()) mapa.encuadrarTerritorio(territorioActual());
+    else if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
     else mapa.encuadrarCentros(lista);
   }
 
@@ -533,9 +556,10 @@ function conectarEventos() {
     if (btn) abrirFicha(Number(btn.dataset.id));
   });
 
-  /* cierres */
+  /* cierres y acciones dentro de la ficha */
   el.ficha.addEventListener('click', (e) => {
-    if (e.target.closest('[data-cerrar-ficha]')) cerrarFicha();
+    if (e.target.closest('[data-cerrar-ficha]')) { cerrarFicha(); return; }
+    if (e.target.closest('[data-accion="ubicar"]')) pedirGeolocalizacion();
   });
   el.acerca.addEventListener('click', (e) => {
     if (e.target.closest('[data-cerrar-acerca]')) cerrarAcerca();

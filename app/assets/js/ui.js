@@ -119,6 +119,15 @@ export function construirFicha(c, origen) {
           <dt>Recorrido aprox.</dt><dd>${esc(formatearKm(v.kmVia))}</dd>
         </div>
       </dl>`;
+  } else {
+    // Sin ubicación no hay distancia que calcular, pero el hueco no debe
+    // quedar mudo: se ofrece activarla desde la propia ficha.
+    resumen = `
+      <button class="resumen resumen--vacio" type="button" data-accion="ubicar">
+        ${svg(ICONOS.pin, 15)}
+        <span><strong>Calcular distancia y tiempo</strong>
+          Activa tu ubicación para saber a qué distancia está y cuánto se tarda en auto.</span>
+      </button>`;
   }
 
   /* avisos */
@@ -171,8 +180,6 @@ export function construirFicha(c, origen) {
         ${c.modalidad ? dato(ICONOS.etiqueta, 'Modalidad', esc(c.modalidad)) : ''}
         ${c.vraem ? dato(ICONOS.aviso, 'Ámbito', 'Zona VRAEM') : ''}
       </div>
-    </section>
-
     </section>`;
 
   const enlaceTel = c.telefono
