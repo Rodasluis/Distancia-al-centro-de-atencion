@@ -106,11 +106,13 @@ export class MapaCentros {
 
     this.grupo = L.markerClusterGroup({
       maxClusterRadius: 46,
-      spiderfyOnMaxZoom: true,
+      // Ni abanico ni acercamiento propio: el zoom lo manda siempre la
+      // selección territorial, para que el mapa no se mueva por su cuenta.
+      spiderfyOnMaxZoom: false,
+      zoomToBoundsOnClick: false,
       showCoverageOnHover: false,
       disableClusteringAtZoom: ZOOM_SIN_AGRUPAR,
       chunkedLoading: true,
-      zoomToBoundsOnClick: false,   // lo gestiona #alPulsarGrupo
       iconCreateFunction: (cluster) => this.#iconoGrupo(cluster),
     });
     this.grupo.addTo(this.mapa);
@@ -199,10 +201,10 @@ export class MapaCentros {
   }
 
   /**
-   * Al pulsar un grupo se baja al territorio común de todos sus centros: el
-   * distrito si comparten distrito, si no la provincia, si no el departamento.
-   * Cuando abarca varios departamentos no hay territorio común y sólo se
-   * acerca; al separarse el grupo, el siguiente clic ya podrá resolverlo.
+   * Pulsar un grupo equivale a pulsar su territorio: se baja al que comparten
+   * todos sus centros —distrito, si no provincia, si no departamento— y el
+   * encuadre lo decide esa selección. Si abarca varios departamentos se toma
+   * el que aporta más centros, para que el clic nunca quede sin efecto.
    */
   #alPulsarGrupo(grupo) {
     const hijos = grupo.getAllChildMarkers();
@@ -210,10 +212,16 @@ export class MapaCentros {
       const v = hijos[0].options[clave];
       return hijos.every((m) => m.options[clave] === v) ? v : null;
     };
-    const ubigeo = comun('ubigeoCentro') || comun('ccppCentro') || comun('ccddCentro');
 
-    if (ubigeo) this.manejadores.alElegirTerritorio?.(ubigeo, null);
-    else this.mapa.fitBounds(grupo.getBounds(), { padding: [40, 40] });
+    let ubigeo = comun('ubigeoCentro') || comun('ccppCentro') || comun('ccddCentro');
+    if (!ubigeo) {
+      const porDep = new Map();
+      for (const m of hijos) {
+        porDep.set(m.options.ccddCentro, (porDep.get(m.options.ccddCentro) || 0) + 1);
+      }
+      ubigeo = [...porDep].sort((a, b) => b[1] - a[1])[0][0];
+    }
+    this.manejadores.alElegirTerritorio?.(ubigeo, null, { alternar: false });
   }
 
   /* -------------------------------------------------------- marcador -- */
@@ -422,36 +430,46 @@ export class MapaCentros {
     return { nivel: efectivo };
   }
 
-  /**
-   * Encuadra el territorio elegido y lo remarca. El zoom máximo depende del
-   * nivel para que cada uno llene la pantalla de forma natural: un
-   * departamento entero, una provincia más cerca y un distrito aún más.
-   */
-  async encuadrarTerritorio(codigo) {
-    this.capaSeleccion?.remove();
-    this.capaSeleccion = null;
-
-    if (!codigo) {
-      this.mapa.fitBounds(PERU_BOUNDS, { padding: [10, 10] });
-      return;
-    }
-
+  /** Capa y zoom máximo con que se dibuja cada nivel territorial. */
+  #nivelDe(codigo) {
     const ccdd = codigo.slice(0, 2);
-    const porLongitud = {
+    return {
       2: { ruta: 'departamentos.geojson', maxZoom: 9 },
       4: { ruta: `provincias/${ccdd}.geojson`, maxZoom: 11 },
       6: { ruta: `distritos/${ccdd}.geojson`, maxZoom: 14 },
-    };
-    const cfg = porLongitud[codigo.length];
-    if (!cfg) return;
+    }[codigo.length] || null;
+  }
 
+  /**
+   * Remarca el territorio elegido, o quita el remarcado si no hay ninguno.
+   * Va aparte del encuadre porque al limpiar los filtros no se reencuadra
+   * el mapa, y el trazo azul se quedaba pegado como si siguiera elegido.
+   */
+  async resaltarTerritorio(codigo) {
+    const cod = codigo || null;
+    // Si ya se está pintando ese mismo territorio hay que esperar a que
+    // termine, no salir de inmediato: quien encuadra necesita la capa lista.
+    if (this._codigoResaltado === cod) { await this._promesaResaltado; return; }
+    this._codigoResaltado = cod;
+    this._promesaResaltado = this.#pintarResaltado(cod);
+    await this._promesaResaltado;
+  }
+
+  async #pintarResaltado(codigo) {
+    this.capaSeleccion?.remove();
+    this.capaSeleccion = null;
+    if (!codigo) return;
+
+    const cfg = this.#nivelDe(codigo);
+    if (!cfg) return;
     try {
       const datos = await cargarCapa(cfg.ruta);
       const f = datos.features.find((x) => x.properties.ubigeo === codigo);
-      if (!f) return;
+      if (!f || this._codigoResaltado !== codigo) return;   // llegó tarde
 
       this.capaSeleccion = L.geoJSON(f, {
         pane: 'limites',
+        renderer: this.rendererLimites,   // mismo SVG que los límites
         interactive: false,
         style: {
           color: '#1c7ed6', weight: 2.6, opacity: .95,
@@ -459,11 +477,27 @@ export class MapaCentros {
           dashArray: '5 4',
         },
       }).addTo(this.mapa);
+    } catch { /* si la capa falla, se queda sin remarcar */ }
+  }
 
-      this.mapa.fitBounds(this.capaSeleccion.getBounds(), {
-        padding: [30, 30], maxZoom: cfg.maxZoom,
-      });
-    } catch { /* si la capa falla, se deja el encuadre actual */ }
+  /**
+   * Encuadra el territorio elegido. El zoom máximo depende del nivel para
+   * que cada uno llene la pantalla de forma natural: un departamento
+   * entero, una provincia más cerca y un distrito aún más.
+   */
+  async encuadrarTerritorio(codigo) {
+    await this.resaltarTerritorio(codigo);
+
+    if (!codigo) {
+      this.mapa.fitBounds(PERU_BOUNDS, { padding: [10, 10] });
+      return;
+    }
+    const cfg = this.#nivelDe(codigo);
+    if (!cfg || !this.capaSeleccion) return;
+
+    this.mapa.fitBounds(this.capaSeleccion.getBounds(), {
+      padding: [30, 30], maxZoom: cfg.maxZoom,
+    });
   }
 
   encuadrarCentros(centros) {

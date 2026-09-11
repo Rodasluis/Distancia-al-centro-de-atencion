@@ -282,7 +282,15 @@ function refrescar({ moverMapa = false } = {}) {
   });
   mapa.dibujarCentros(lista);
   mapa.dibujarOrigen(estado.origen, radioKm());
-  if (estado.seleccionado != null) mapa.resaltar(estado.seleccionado, false);
+  // El remarcado sigue al filtro en todo refresco, también cuando se limpia.
+  mapa.resaltarTerritorio(territorioActual());
+
+  // La ficha no debe sobrevivir a un filtro que deja fuera a su centro.
+  if (estado.seleccionado != null && !lista.some((c) => c.id === estado.seleccionado)) {
+    cerrarFicha(false);
+  } else if (estado.seleccionado != null) {
+    mapa.resaltar(estado.seleccionado, false);
+  }
 
   if (moverMapa) {
     if (territorioActual()) mapa.encuadrarTerritorio(territorioActual());
@@ -332,17 +340,22 @@ async function sincronizarLimites() {
  * un nivel. Volver a pulsar el territorio ya seleccionado sube un nivel, para
  * poder retroceder sin tocar los desplegables.
  */
-async function seleccionarTerritorio(ubigeo, nombre) {
+async function seleccionarTerritorio(ubigeo, nombre, { alternar = true } = {}) {
   // Los desplegables sólo listan territorios con centros, así que seleccionar
   // uno vacío se descartaría en silencio. Se encuadra igual y se explica.
   const campo = ubigeo.length === 2 ? 'ccdd' : ubigeo.length === 4 ? 'ccpp' : 'ubigeo';
   if (!DIR.centros.some((c) => c[campo] === ubigeo)) {
     await mapa.encuadrarTerritorio(ubigeo);
-    avisoTemporal(`${nombre} no tiene centros de atención registrados en el directorio.`);
+    avisoTemporal(nombre
+      ? `${nombre} no tiene centros de atención registrados en el directorio.`
+      : 'Ese territorio no tiene centros de atención registrados en el directorio.');
     return;
   }
 
-  const yaSeleccionado = territorioActual() === ubigeo;
+  // Pulsar el territorio ya elegido lo deselecciona, salvo cuando el clic
+  // viene de un grupo de centros: ahí sólo cabe bajar, nunca deshacer.
+  const yaSeleccionado = alternar && territorioActual() === ubigeo;
+  if (!alternar && territorioActual() === ubigeo) return;
 
   if (ubigeo.length === 2) {
     estado.dep = yaSeleccionado ? '' : ubigeo;
@@ -400,12 +413,16 @@ function abrirFicha(id) {
   escribirURL();
 }
 
-function cerrarFicha() {
+/**
+ * @param {boolean} devolverFoco  false cuando la ficha se cierra sola por un
+ *   cambio de filtro: mover el foco interrumpiría a quien está escribiendo.
+ */
+function cerrarFicha(devolverFoco = true) {
   el.ficha.hidden = true;
   estado.seleccionado = null;
   mapa.limpiarResaltado();
   el.lista.querySelectorAll('.item.is-activo').forEach((b) => b.classList.remove('is-activo'));
-  ultimoFoco?.focus?.();
+  if (devolverFoco) ultimoFoco?.focus?.();
   escribirURL();
 }
 
@@ -526,6 +543,8 @@ function conectarEventos() {
   el.btnQuitarUbicacion.addEventListener('click', quitarOrigen);
 
   el.btnLimpiar.addEventListener('click', async () => {
+    // Limpiar deja el mapa como al entrar: sin territorio, sin ficha abierta.
+    if (!el.ficha.hidden) cerrarFicha(false);
     estado.dep = ''; estado.prov = ''; estado.dist = '';
     estado.tipo = ''; estado.q = '';
     el.q.value = '';
