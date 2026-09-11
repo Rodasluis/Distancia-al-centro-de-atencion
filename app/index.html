@@ -85,17 +85,6 @@
   </div>
 </form>
 
-<!-- Segunda fila: sólo aparece cuando hay una ubicación activa -->
-<div class="barra barra--radio" id="radio-control" hidden>
-  <div class="radio-control">
-    <label for="radio">Radio de búsqueda</label>
-    <input type="range" id="radio" min="0" max="16" step="1" value="8" aria-describedby="ubicacion-estado">
-    <output class="radio-control__valor" id="radio-valor" for="radio">25 km</output>
-  </div>
-  <p class="ubicacion__estado" id="ubicacion-estado" role="status"></p>
-  <button class="btn btn--ghost btn--sm" id="btn-quitar-ubicacion" type="button">Quitar ubicación</button>
-</div>
-
 <div class="layout">
 
   <!-- ─────────────────────────────────────── resultados ── -->
@@ -130,23 +119,25 @@
   <main class="mapa-wrap">
     <div id="mapa" role="application" aria-label="Mapa de centros de atención del MIMP"></div>
 
-    <div class="mapa__leyenda" id="leyenda" hidden>
-      <button class="leyenda__toggle" type="button" aria-expanded="false" aria-controls="leyenda-cuerpo">
-        Capas del mapa
-      </button>
-      <div class="leyenda__cuerpo" id="leyenda-cuerpo" hidden>
-        <fieldset>
-          <legend class="sr-only">Límites territoriales</legend>
-          <label><input type="radio" name="capa" value="auto" checked> Automático</label>
-          <label><input type="radio" name="capa" value="departamentos"> Departamentos</label>
-          <label><input type="radio" name="capa" value="provincias"> Provincias</label>
-          <label><input type="radio" name="capa" value="distritos"> Distritos</label>
-          <label><input type="radio" name="capa" value="ninguna"> Sin límites</label>
-        </fieldset>
-        <p class="leyenda__nota">En «Automático» el detalle sigue al filtro territorial.</p>
-      </div>
-    </div>
+    <!-- Ruta territorial: indica dónde estás y permite volver a cualquier
+         nivel, que si no sólo se sale con «Limpiar». -->
+    <nav class="migas" id="migas" aria-label="Territorio seleccionado"></nav>
+
   </main>
+
+  <!-- Control del radio: flota sobre el mapa, junto al círculo que gobierna.
+       Sólo aparece cuando hay una ubicación activa. -->
+  <div class="radio-flotante" id="radio-control" hidden>
+    <div class="radio-flotante__cabecera">
+      <label for="radio">Radio de búsqueda</label>
+      <output class="radio-flotante__valor" id="radio-valor" for="radio">25 km</output>
+    </div>
+    <input type="range" id="radio" min="0" max="16" step="1" value="8" aria-describedby="ubicacion-estado">
+    <div class="radio-flotante__pie">
+      <p class="ubicacion__estado" id="ubicacion-estado" role="status"></p>
+      <button class="btn btn--ghost btn--sm" id="btn-quitar-ubicacion" type="button">Quitar</button>
+    </div>
+  </div>
 
   <!-- ────────────────────────────────────────────── ficha detallada ── -->
   <!-- En escritorio flota sobre el mapa sin bloquearlo, así que no es modal;

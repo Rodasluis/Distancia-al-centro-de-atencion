@@ -86,7 +86,10 @@ export class MapaCentros {
       attributionControl: true,
     });
 
+    // En las esquinas inferiores Leaflet apila cada control nuevo por encima
+    // del anterior: el zoom va primero para que «mi ubicación» quede arriba.
     L.control.zoom({ position: 'bottomright' }).addTo(this.mapa);
+    this.#anadirControlUbicacion();
     this.mapa.attributionControl.setPrefix('');
 
     // Orden de pintado, de abajo arriba: fondo (200) · límites (350) ·
@@ -140,6 +143,42 @@ export class MapaCentros {
       ? `<img src="${new URL(this.iconos.ruta + def.archivo, BASE_APP)}" alt="" loading="lazy">`
       : `<span class="pin__sigla">${def.sigla}</span>`;
     return { color: def.color, html };
+  }
+
+  /**
+   * Botón «mi ubicación», junto al zoom y con el mismo aspecto que en las
+   * aplicaciones de mapas: centra en tu posición, o la pide si aún no la hay.
+   */
+  #anadirControlUbicacion() {
+    const Control = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd: () => {
+        const cont = L.DomUtil.create('div', 'leaflet-bar ctrl-ubicacion');
+        const a = L.DomUtil.create('a', '', cont);
+        a.href = '#';
+        a.title = 'Centrar en mi ubicación';
+        a.setAttribute('role', 'button');
+        a.setAttribute('aria-label', 'Centrar en mi ubicación');
+        a.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+          + '<path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.94 3a9 9 0 0 0-7.94-7.94V1h-2v2.06'
+          + 'A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2h-2.06Z'
+          + 'M12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>';
+        L.DomEvent.on(a, 'click', (e) => {
+          L.DomEvent.stop(e);
+          this.manejadores.alPedirUbicacion?.();
+        });
+        this.botonUbicacion = cont;
+        return cont;
+      },
+    });
+    new Control().addTo(this.mapa);
+  }
+
+  /** Marca el botón mientras se está localizando o cuando ya hay posición. */
+  estadoBotonUbicacion(estado) {
+    if (!this.botonUbicacion) return;
+    this.botonUbicacion.classList.toggle('is-buscando', estado === 'buscando');
+    this.botonUbicacion.classList.toggle('is-activa', estado === 'activa');
   }
 
   /* ------------------------------------------------------------ tema -- */
@@ -268,13 +307,32 @@ export class MapaCentros {
     const act = this.marcadores.get(id);
     if (!act) return;
     act.marcador.setIcon(this.#icono(act.centro, true));
-    if (centrar) {
-      // Se evita zoomToShowLayer: si el grupo se redibuja durante su animación,
-      // markercluster falla al perder la referencia al mapa. Basta con acercarse
-      // más allá de disableClusteringAtZoom para que el marcador quede suelto.
-      const zoom = Math.max(this.mapa.getZoom(), 16);
-      this.centrarEnVisible(act.marcador.getLatLng(), zoom);
-    }
+    if (centrar) this.#mostrarMarcador(act.marcador);
+  }
+
+  /**
+   * Trae un centro a la vista sin perder el contexto. Antes se saltaba
+   * siempre a zoom 16 y la pantalla quedaba dentro de un solo distrito, sin
+   * ningún otro territorio que pulsar; ahora sólo se acerca si estás muy
+   * lejos, y sólo se mueve si el punto no se ve ya.
+   */
+  #mostrarMarcador(marcador) {
+    const latlng = marcador.getLatLng();
+    // Si el marcador está dentro de un grupo no tiene icono propio en el
+    // mapa: hay que acercarse hasta donde los grupos se deshacen, o el
+    // centro elegido quedaría escondido dentro del montón.
+    const suelto = Boolean(marcador._icon);
+    if (suelto && this.#estaVisible(latlng)) return;
+    this.centrarEnVisible(latlng, Math.max(this.mapa.getZoom(), ZOOM_SIN_AGRUPAR));
+  }
+
+  /** ¿El punto cae en la parte del mapa que la ficha no tapa? */
+  #estaVisible(latlng) {
+    const p = this.mapa.latLngToContainerPoint(latlng);
+    const t = this.mapa.getSize();
+    const margen = 60;
+    return p.x > margen && p.x < t.x - this.#anchoTapado() - margen
+      && p.y > margen && p.y < t.y - margen;
   }
 
   /**
@@ -367,11 +425,16 @@ export class MapaCentros {
 
     if (this._claveLimites === ruta) return { nivel: efectivo };
 
+    // Los distritos de un departamento llegan a 272 KB: sin señal alguna
+    // parece que la aplicación se ha quedado colgada.
     let datos;
+    this.manejadores.alCargarCapa?.(true);
     try {
       datos = await cargarCapa(ruta);
     } catch {
       return { nivel: efectivo, error: true };
+    } finally {
+      this.manejadores.alCargarCapa?.(false);
     }
     quitar();
     this._claveLimites = ruta;
@@ -486,6 +549,10 @@ export class MapaCentros {
       paddingTopLeft: [24, 54],
       paddingBottomRight: [24, 24],
       maxZoom: 14,
+      // Sin animación: es un encuadre de apertura o de reinicio, y si al
+      // arrancar llega la ubicación mientras este se anima, Leaflet descarta
+      // el encuadre del radio y el mapa se queda en la vista del país.
+      animate: false,
     });
   }
 

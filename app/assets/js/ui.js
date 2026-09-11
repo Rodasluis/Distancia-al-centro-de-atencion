@@ -16,6 +16,7 @@ const ICONOS = {
   etiqueta: '<path d="M10 3H4a1 1 0 0 0-1 1v6l10.5 10.5a1 1 0 0 0 1.4 0l6.6-6.6a1 1 0 0 0 0-1.4L11 3Zm-3.5 5A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8Z"/>',
   aviso: '<path d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-6h-2v5h2v-5Z"/>',
   reloj: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6 4 2.3-.75 1.3L11.5 13.4V6.5h1.5v6.1Z"/>',
+  compartir: '<path d="M18 16a3 3 0 0 0-2.1.87l-6.03-3.5a3 3 0 0 0 0-1.74l6.03-3.5a3 3 0 1 0-1-1.72L8.9 9.9a3 3 0 1 0 0 4.2l6.02 3.5A3 3 0 1 0 18 16Z"/>',
 };
 
 const svg = (d, tam = 14) =>
@@ -57,12 +58,14 @@ export function pintarLista(contenedor, centros, opciones) {
     }
     if (c.vraem) metricas.push('<span class="badge badge--vraem">VRAEM</span>');
 
-    // Con ranking se muestra el número; sin él, el icono del tipo de centro.
+    // Siempre el icono del tipo de centro; con ranking, el número va encima
+    // en una insignia, para no tener que elegir entre una cosa y la otra.
     const marca = opciones.marcaDe?.(c.tipo);
-    const insignia = rank !== null
-      ? `<span class="item__rank" aria-hidden="true">${rank}</span>`
-      : `<span class="item__rank item__rank--icono" aria-hidden="true"
-               style="--pin-color:${marca?.color || 'var(--mimp)'}">${marca?.html || svg(ICONOS.pin, 13)}</span>`;
+    const insignia = `
+      <span class="item__marca" aria-hidden="true" style="--pin-color:${marca?.color || 'var(--mimp)'}">
+        <span class="item__rank item__rank--icono">${marca?.html || svg(ICONOS.pin, 13)}</span>
+        ${rank !== null ? `<span class="item__orden">${rank}</span>` : ''}
+      </span>`;
 
     li.innerHTML = `
       <button class="item${rank && rank <= 3 ? ' is-top' : ''}${c.id === opciones.seleccionado ? ' is-activo' : ''}"
@@ -192,7 +195,11 @@ export function construirFicha(c, origen) {
     </a>
     ${enlaceTel
       ? `<a class="btn btn--ghost" href="${enlaceTel}">${svg(ICONOS.tel, 15)} Llamar</a>`
-      : `<a class="btn btn--ghost" href="${esc(urlVerEnMapa(c))}" target="_blank" rel="noopener">${svg(ICONOS.pin, 15)} Ver en Google Maps</a>`}`;
+      : `<a class="btn btn--ghost" href="${esc(urlVerEnMapa(c))}" target="_blank" rel="noopener">${svg(ICONOS.pin, 15)} Ver en Google Maps</a>`}
+    <button class="btn btn--ghost btn--icon" type="button" data-accion="compartir"
+            title="Copiar enlace a esta ficha" aria-label="Copiar enlace a esta ficha">
+      ${svg(ICONOS.compartir, 16)}
+    </button>`;
 
   return { cuerpo, pie };
 }

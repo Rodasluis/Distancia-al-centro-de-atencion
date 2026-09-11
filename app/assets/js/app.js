@@ -41,7 +41,7 @@ const el = {
   fichaPie: $('#ficha-pie'),
   acerca: $('#acerca'),
   cargando: $('#cargando'),
-  leyenda: $('#leyenda'),
+  migas: $('#migas'),
   pieMeta: $('#pie-meta'),
 };
 
@@ -51,7 +51,6 @@ const estado = {
   dep: '', prov: '', dist: '', tipo: '', q: '',
   orden: 'nombre',
   seleccionado: null,
-  capa: 'auto',
 };
 
 let DIR = null;
@@ -97,7 +96,6 @@ function leerURL() {
   if (p.has('tipo')) estado.tipo = p.get('tipo');
   if (p.has('q')) estado.q = p.get('q');
   if (p.has('orden')) estado.orden = p.get('orden');
-  if (p.has('capa')) estado.capa = p.get('capa');
   if (p.has('r')) {
     const i = Number(p.get('r'));
     if (Number.isInteger(i) && i >= 0 && i < RADIOS.length) estado.radioIdx = i;
@@ -126,7 +124,6 @@ function escribirURL() {
     if (estado.tipo) p.set('tipo', estado.tipo);
     if (estado.q) p.set('q', estado.q);
     if (estado.orden !== 'nombre') p.set('orden', estado.orden);
-    if (estado.capa !== 'auto') p.set('capa', estado.capa);
     if (estado.origen) {
       p.set('o', `${estado.origen.lat.toFixed(5)},${estado.origen.lon.toFixed(5)}`);
       p.set('r', String(estado.radioIdx));
@@ -284,6 +281,7 @@ function refrescar({ moverMapa = false } = {}) {
   mapa.dibujarOrigen(estado.origen, radioKm());
   // El remarcado sigue al filtro en todo refresco, también cuando se limpia.
   mapa.resaltarTerritorio(territorioActual());
+  pintarMigas();
 
   // La ficha no debe sobrevivir a un filtro que deja fuera a su centro.
   if (estado.seleccionado != null && !lista.some((c) => c.id === estado.seleccionado)) {
@@ -304,6 +302,29 @@ function refrescar({ moverMapa = false } = {}) {
 /** Código del territorio seleccionado, en el nivel más fino elegido. */
 const territorioActual = () => estado.dist || estado.prov || estado.dep || '';
 
+/**
+ * Ruta territorial sobre el mapa. Sin ella, una vez dentro de un distrito
+ * sólo se podía salir con «Limpiar»: no hay otro territorio a la vista que
+ * pulsar, porque la pantalla entera cae dentro del que ya está elegido.
+ */
+function pintarMigas() {
+  const nombre = (lista, id) => lista.find((x) => x.id === id)?.nombre || id;
+  const pasos = [{ codigo: '', texto: 'Perú' }];
+  if (estado.dep) pasos.push({ codigo: estado.dep, texto: nombre(DIR.catalogo.departamentos, estado.dep) });
+  if (estado.prov) pasos.push({ codigo: estado.prov, texto: nombre(DIR.catalogo.provincias, estado.prov) });
+  if (estado.dist) pasos.push({ codigo: estado.dist, texto: nombre(DIR.catalogo.distritos, estado.dist) });
+
+  el.migas.innerHTML = pasos.map((p, i) => {
+    const ultimo = i === pasos.length - 1;
+    const texto = p.texto.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    return (i ? '<span class="migas__sep" aria-hidden="true">›</span>' : '')
+      + (ultimo
+        ? `<span class="migas__actual" aria-current="location">${texto}</span>`
+        : `<button class="migas__paso" type="button" data-ir="${p.codigo}">${texto}</button>`);
+  }).join('');
+  el.migas.hidden = pasos.length === 1;
+}
+
 /** Mensaje pasajero en la franja de avisos; el próximo refresco lo sustituye. */
 let temporizadorAviso;
 function avisoTemporal(texto) {
@@ -314,22 +335,16 @@ function avisoTemporal(texto) {
 }
 
 /**
- * Elige la capa de límites. En modo «auto» el detalle acompaña al filtro:
- * sin filtro se ven los departamentos; con departamento, sus provincias;
- * con provincia o distrito, los distritos de ese departamento.
+ * El detalle de los límites acompaña al filtro: sin filtro se ven los
+ * departamentos; con departamento, sus provincias; con provincia o
+ * distrito, los distritos de ese departamento.
  */
 async function sincronizarLimites() {
   const ccdd = estado.dep || null;
-  let nivel = estado.capa;
-
-  if (nivel === 'auto') {
-    if (estado.prov || estado.dist) nivel = 'distritos';
-    else if (estado.dep) nivel = 'provincias';
-    else nivel = 'departamentos';
-  }
-  // Provincias y distritos se sirven por departamento: sin uno elegido no
-  // hay archivo que cargar y se cae a la capa nacional.
-  if ((nivel === 'provincias' || nivel === 'distritos') && !ccdd) nivel = 'departamentos';
+  let nivel;
+  if (estado.prov || estado.dist) nivel = 'distritos';
+  else if (ccdd) nivel = 'provincias';
+  else nivel = 'departamentos';
 
   await mapa.mostrarLimites(nivel, ccdd);
 }
@@ -383,8 +398,9 @@ async function aplicarTerritorio() {
   refrescar();
   // El encuadre territorial manda sobre el del radio: el usuario acaba de
   // pedir explícitamente ver esa zona.
+  // Volver a «Perú» desde la ruta significa ver el país entero, aunque haya
+  // una ubicación activa: el encuadre sigue al territorio que se ha pulsado.
   await mapa.encuadrarTerritorio(territorioActual());
-  if (!territorioActual() && estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
 }
 
 /* =========================================================== ficha === */
@@ -426,6 +442,19 @@ function cerrarFicha(devolverFoco = true) {
   escribirURL();
 }
 
+/** Copia la URL actual, que ya lleva el centro y los filtros abiertos. */
+async function copiarEnlace(boton) {
+  const original = boton.title;
+  try {
+    await navigator.clipboard.writeText(location.href);
+    boton.title = 'Enlace copiado';
+    boton.classList.add('is-ok');
+  } catch {
+    boton.title = 'No se pudo copiar; copia la dirección de la barra';
+  }
+  setTimeout(() => { boton.title = original; boton.classList.remove('is-ok'); }, 2200);
+}
+
 function abrirAcerca() {
   ultimoFoco = document.activeElement;
   el.acerca.hidden = false;
@@ -450,33 +479,73 @@ function fijarOrigen(origen, etiqueta) {
   refrescar({ moverMapa: true });
 }
 
+/**
+ * Si ya hay ubicación, sólo recentra el mapa; si no, la pide.
+ * Es lo que hace el botón del mapa y el de la barra.
+ */
+function usarMiUbicacion() {
+  if (estado.origen) {
+    mapa.centrarEnVisible([estado.origen.lat, estado.origen.lon],
+      Math.max(mapa.zoomActual ?? 12, 12));
+    return;
+  }
+  pedirGeolocalizacion();
+}
+
 function pedirGeolocalizacion() {
   if (!('geolocation' in navigator)) {
-    estadoUbicacion('Tu navegador no permite geolocalización. Usa «Elegir en el mapa».', 'is-error');
+    estadoUbicacion('Tu navegador no permite geolocalización.', 'is-error');
     return;
   }
   el.btnGeo.disabled = true;
+  mapa?.estadoBotonUbicacion('buscando');
+  el.radioControl.hidden = false;
   estadoUbicacion('Obteniendo tu ubicación…');
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       el.btnGeo.disabled = false;
+      mapa?.estadoBotonUbicacion('activa');
       const { latitude, longitude, accuracy } = pos.coords;
-      const precision = accuracy ? ` (precisión ≈ ${Math.round(accuracy)} m)` : '';
+      const precision = accuracy ? ` · precisión ≈ ${Math.round(accuracy)} m` : '';
       fijarOrigen({ lat: latitude, lon: longitude, fuente: 'gps' },
-        `Ubicación detectada${precision}.`);
+        `Ubicación detectada${precision}`);
     },
     (err) => {
       el.btnGeo.disabled = false;
+      mapa?.estadoBotonUbicacion('');
+      el.radioControl.hidden = !estado.origen;
       const motivos = {
-        1: 'Permiso denegado. Puedes marcar tu posición con «Elegir en el mapa».',
-        2: 'No se pudo determinar tu posición. Inténtalo de nuevo o usa «Elegir en el mapa».',
+        1: 'Permiso de ubicación denegado. Puedes buscar por departamento, provincia y distrito, '
+          + 'o permitirlo desde el icono de la barra de direcciones.',
+        2: 'No se pudo determinar tu posición. Inténtalo de nuevo.',
         3: 'La búsqueda de ubicación tardó demasiado. Inténtalo de nuevo.',
       };
-      estadoUbicacion(motivos[err.code] || 'No se pudo obtener tu ubicación.', 'is-error');
+      const texto = motivos[err.code] || 'No se pudo obtener tu ubicación.';
+      estadoUbicacion(texto, 'is-error');
+      // Sin ubicación no hay ranking por cercanía: se explica en los resultados.
+      if (err.code === 1) avisoTemporal(texto);
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
   );
+}
+
+/**
+ * Al abrir la página se intenta obtener la ubicación, porque es lo que hace
+ * útil el ranking por cercanía. Si el permiso ya estaba concedido se resuelve
+ * sin preguntar; si estaba denegado no se insiste, para no mostrar un aviso
+ * del navegador que el usuario ya rechazó.
+ */
+async function ubicacionAlArrancar() {
+  if (estado.origen || !('geolocation' in navigator)) return;
+  try {
+    const permiso = await navigator.permissions?.query({ name: 'geolocation' });
+    if (permiso?.state === 'denied') {
+      estadoUbicacion('Ubicación desactivada. Busca por departamento, provincia y distrito.');
+      return;
+    }
+  } catch { /* sin API de permisos: se pide igual */ }
+  pedirGeolocalizacion();
 }
 
 function quitarOrigen() {
@@ -524,9 +593,8 @@ function conectarEventos() {
 
   el.orden.addEventListener('change', () => {
     estado.orden = el.orden.value;
-    if (estado.orden === 'cercania' && !estado.origen) {
-      estadoUbicacion('Necesitas activar tu ubicación para ordenar por cercanía.', 'is-error');
-    }
+    // Pedir «más cercanos» sin ubicación no puede quedarse en nada: se pide.
+    if (estado.orden === 'cercania' && !estado.origen) pedirGeolocalizacion();
     refrescar();
   });
 
@@ -539,8 +607,22 @@ function conectarEventos() {
     mapa.encuadrarRadio(estado.origen, radioKm());
   });
 
-  el.btnGeo.addEventListener('click', pedirGeolocalizacion);
+  el.btnGeo.addEventListener('click', usarMiUbicacion);
   el.btnQuitarUbicacion.addEventListener('click', quitarOrigen);
+
+  /* ruta territorial: volver a cualquier nivel anterior */
+  el.migas.addEventListener('click', async (e) => {
+    const paso = e.target.closest('[data-ir]');
+    if (!paso) return;
+    const codigo = paso.dataset.ir;
+    estado.dep = codigo.slice(0, 2);
+    estado.prov = codigo.length >= 4 ? codigo.slice(0, 4) : '';
+    estado.dist = codigo.length === 6 ? codigo : '';
+    el.dep.value = estado.dep;
+    llenarProvincias();
+    llenarDistritos();
+    await aplicarTerritorio();
+  });
 
   el.btnLimpiar.addEventListener('click', async () => {
     // Limpiar deja el mapa como al entrar: sin territorio, sin ficha abierta.
@@ -578,7 +660,9 @@ function conectarEventos() {
   /* cierres y acciones dentro de la ficha */
   el.ficha.addEventListener('click', (e) => {
     if (e.target.closest('[data-cerrar-ficha]')) { cerrarFicha(); return; }
-    if (e.target.closest('[data-accion="ubicar"]')) pedirGeolocalizacion();
+    if (e.target.closest('[data-accion="ubicar"]')) { pedirGeolocalizacion(); return; }
+    const compartir = e.target.closest('[data-accion="compartir"]');
+    if (compartir) copiarEnlace(compartir);
   });
   el.acerca.addEventListener('click', (e) => {
     if (e.target.closest('[data-cerrar-acerca]')) cerrarAcerca();
@@ -587,21 +671,6 @@ function conectarEventos() {
     if (e.key !== 'Escape') return;
     if (!el.ficha.hidden) cerrarFicha();
     else if (!el.acerca.hidden) cerrarAcerca();
-  });
-
-  /* capas del mapa */
-  el.leyenda.querySelector('.leyenda__toggle').addEventListener('click', (e) => {
-    const cuerpo = el.leyenda.querySelector('.leyenda__cuerpo');
-    const abierto = e.currentTarget.getAttribute('aria-expanded') === 'true';
-    e.currentTarget.setAttribute('aria-expanded', String(!abierto));
-    cuerpo.hidden = abierto;
-  });
-  el.leyenda.querySelectorAll('input[name="capa"]').forEach((r) => {
-    r.addEventListener('change', async () => {
-      estado.capa = r.value;
-      await sincronizarLimites();
-      escribirURL();
-    });
   });
 
   /* lista / mapa en móvil */
@@ -647,6 +716,8 @@ async function iniciar() {
   mapa = new MapaCentros('mapa', {
     alSeleccionar: abrirFicha,
     alElegirTerritorio: seleccionarTerritorio,
+    alPedirUbicacion: usarMiUbicacion,
+    alCargarCapa: (cargando) => document.body.classList.toggle('cargando-capa', cargando),
   }, ICONOS);
   mapa.aplicarTema(temaOscuroActivo());
 
@@ -660,12 +731,11 @@ async function iniciar() {
   el.radio.value = String(estado.radioIdx);
   el.radioValor.textContent = textoRadio();
   el.radioControl.hidden = !estado.origen;
-  const radioCapa = el.leyenda.querySelector(`input[name="capa"][value="${estado.capa}"]`);
-  if (radioCapa) radioCapa.checked = true;
 
   if (estado.origen) {
     el.btnGeoTxt.textContent = 'Actualizar ubicación';
     estadoUbicacion('Ubicación tomada del enlace compartido.', 'is-ok');
+    mapa.estadoBotonUbicacion('activa');
   }
 
   conectarEventos();
@@ -674,7 +744,6 @@ async function iniciar() {
   // del constructor, más lejos de lo necesario para ver el país entero.
   refrescar({ moverMapa: true });
 
-  el.leyenda.hidden = false;
   el.pieMeta.textContent =
     `${DIR.meta.total} centros de atención físicos · ${DIR.meta.excluidos} servicios `
     + `sin local o sin coordenadas quedan fuera · datos del ${DIR.meta.generado}.`;
@@ -687,6 +756,10 @@ async function iniciar() {
 
   el.cargando.classList.add('is-oculto');
   setTimeout(() => { el.cargando.hidden = true; }, 300);
+
+  // Se pide al final para que la interfaz ya esté visible detrás del aviso
+  // del navegador y se entienda de dónde sale la petición.
+  ubicacionAlArrancar();
 }
 
 iniciar();
