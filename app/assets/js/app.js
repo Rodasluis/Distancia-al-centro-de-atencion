@@ -670,10 +670,9 @@ async function iniciar() {
 
   conectarEventos();
   await sincronizarLimites();
-  refrescar();
-  // Si el enlace traía un territorio, se encuadra; si no, se ve todo el Perú.
-  if (territorioActual()) await mapa.encuadrarTerritorio(territorioActual());
-  else if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
+  // moverMapa encuadra de entrada: sin esto el mapa arrancaba en el zoom fijo
+  // del constructor, más lejos de lo necesario para ver el país entero.
+  refrescar({ moverMapa: true });
 
   el.leyenda.hidden = false;
   el.pieMeta.textContent =

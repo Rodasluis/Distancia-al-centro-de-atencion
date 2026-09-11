@@ -515,6 +515,10 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   box-shadow: 0 0 0 3px rgba(28, 126, 214, .32), 0 2px 6px rgba(0, 0, 0, .4);
 }
 
+/* El grupo es informativo, no un control: deja pasar el clic al territorio
+   que tiene debajo para no bloquear la selección. */
+.grupo-icono { pointer-events: none !important; cursor: inherit; }
+
 /* Grupo de centros: el icono del tipo predominante con el recuento en una
    esquina, en lugar de un globo con un número suelto. */
 .grupo {

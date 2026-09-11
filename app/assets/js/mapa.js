@@ -117,11 +117,6 @@ export class MapaCentros {
     });
     this.grupo.addTo(this.mapa);
 
-    // Pulsar un grupo baja de nivel territorial igual que pulsar el mapa: si
-    // sólo se limitara a acercar, el usuario quedaría con los límites
-    // departamentales fuera de pantalla y sin nada que pulsar.
-    this.grupo.on('clusterclick', (e) => this.#alPulsarGrupo(e.layer));
-
     // El tamaño del marcador depende del zoom, así que hay que repintarlos
     // al terminar cada cambio de escala.
     this.zoomActual = this.mapa.getZoom();
@@ -195,33 +190,12 @@ export class MapaCentros {
                ${html}
                <span class="grupo__n">${n > 999 ? '999+' : n}</span>
              </div>`,
-      className: '',
+      // «grupo-icono» lo hace transparente al ratón: el grupo sólo informa de
+      // cuántos centros hay ahí, y el clic debe llegar al territorio de debajo
+      // para poder seguir eligiendo departamento, provincia o distrito.
+      className: 'grupo-icono',
       iconSize: [tam, tam],
     });
-  }
-
-  /**
-   * Pulsar un grupo equivale a pulsar su territorio: se baja al que comparten
-   * todos sus centros —distrito, si no provincia, si no departamento— y el
-   * encuadre lo decide esa selección. Si abarca varios departamentos se toma
-   * el que aporta más centros, para que el clic nunca quede sin efecto.
-   */
-  #alPulsarGrupo(grupo) {
-    const hijos = grupo.getAllChildMarkers();
-    const comun = (clave) => {
-      const v = hijos[0].options[clave];
-      return hijos.every((m) => m.options[clave] === v) ? v : null;
-    };
-
-    let ubigeo = comun('ubigeoCentro') || comun('ccppCentro') || comun('ccddCentro');
-    if (!ubigeo) {
-      const porDep = new Map();
-      for (const m of hijos) {
-        porDep.set(m.options.ccddCentro, (porDep.get(m.options.ccddCentro) || 0) + 1);
-      }
-      ubigeo = [...porDep].sort((a, b) => b[1] - a[1])[0][0];
-    }
-    this.manejadores.alElegirTerritorio?.(ubigeo, null, { alternar: false });
   }
 
   /* -------------------------------------------------------- marcador -- */
@@ -500,10 +474,19 @@ export class MapaCentros {
     });
   }
 
+  /**
+   * Encuadra el conjunto de centros aprovechando todo el espacio disponible.
+   * El margen superior es mayor porque el marcador se dibuja por encima de su
+   * punto: con un margen parejo, los centros del norte quedarían cortados.
+   */
   encuadrarCentros(centros) {
     if (!centros.length) return;
     const b = L.latLngBounds(centros.map((c) => [c.lat, c.lon]));
-    this.mapa.fitBounds(b, { padding: [40, 40], maxZoom: 14 });
+    this.mapa.fitBounds(b, {
+      paddingTopLeft: [24, 54],
+      paddingBottomRight: [24, 24],
+      maxZoom: 14,
+    });
   }
 
   invalidar() { this.mapa.invalidateSize(); }
