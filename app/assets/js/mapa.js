@@ -82,7 +82,11 @@ export class MapaCentros {
       maxBounds: PERU_BOUNDS.pad(0.45),
       maxBoundsViscosity: 0.7,
       zoomControl: false,
-      preferCanvas: true,
+      // Sin preferCanvas: el renderizador de canvas ocupa todo el mapa y
+      // captura los clics, de modo que el círculo del radio —que sólo es
+      // decorativo— dejaba inseleccionables los límites de debajo, y el
+      // canvas seguía ahí aunque se quitara la ubicación. En SVG, una
+      // figura no interactiva no recibe puntero y no estorba.
       attributionControl: true,
     });
 

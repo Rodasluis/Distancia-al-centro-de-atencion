@@ -1,138 +1,164 @@
 # Servicios MIMP — buscador de centros de atención
 
-Aplicación web **estática** para consultar y localizar los servicios y centros de atención
-del **Ministerio de la Mujer y Poblaciones Vulnerables (MIMP)** del Perú. Funciona
-íntegramente en el navegador y se publica en GitHub Pages sin ningún servidor.
+Aplicación web estática que localiza los centros de atención del **Ministerio de la Mujer
+y Poblaciones Vulnerables (MIMP)** del Perú. Se ejecuta íntegramente en el navegador y se
+sirve como contenido estático, sin componente de servidor.
 
-Contiene **704 centros de atención físicos** repartidos por los 25 departamentos del país.
+**704 centros de atención físicos** en los 25 departamentos del país.
+
+🔗 https://rodasluis.github.io/Distancia-al-centro-de-atencion/
 
 ---
 
-## Qué permite hacer
+## Arquitectura
 
-| | |
-|---|---|
-| **Ubicación** | Detecta tu posición con el GPS del navegador desde la propia barra de filtros. |
-| **Ranking de cercanía** | Ordena los centros del más próximo al más lejano y los numera 1, 2, 3… |
-| **Distancia y tiempo** | Distancia real sobre el terreno y estimación del trayecto en automóvil. |
-| **Radio de búsqueda** | Deslizador de 1 km a 250 km, o sin límite. Sólo se listan los centros dentro del radio. |
-| **Filtros territoriales** | Barra superior con departamento → provincia → distrito en cascada, con el número de centros de cada uno. |
-| **Combinación** | Los filtros territoriales y la búsqueda por cercanía se aplican a la vez. |
-| **Tipo de centro** | 20 tipos: CEM, CAR, CEDIF, UPE, SAR, CAD, CARPAM, SAU… |
-| **Búsqueda libre** | Por nombre, dirección, responsable o código, ignorando tildes. |
-| **Mapa interactivo** | Límites departamentales, provinciales y distritales del Perú. El detalle sigue al filtro y el mapa hace zoom automático al territorio elegido, que queda remarcado. |
-| **Navegar por el mapa** | Clic sobre un departamento, provincia o distrito para bajar de nivel; volver a pulsarlo sube. Los desplegables se sincronizan solos. |
-| **Iconos por tipo** | Cada tipo de centro usa su icono oficial del MIMP; los que la clasificación no cubre llevan un marcador con su sigla y color propios. El tamaño crece con el zoom. |
-| **Agrupación** | Sólo por debajo del nivel de provincia, donde la densidad lo exige. El globo muestra el icono del tipo predominante con el recuento, no un número suelto. |
-| **Ficha detallada** | Tarjeta flotante sobre el mapa con dirección, responsable, teléfono y modalidad; el mapa sigue siendo manejable con ella abierta. |
-| **Cómo llegar** | Abre la ruta en Google Maps desde tu ubicación. |
-| **Enlace compartible** | El estado de la búsqueda se guarda en la URL. |
+Sin framework ni empaquetador: HTML, CSS y JavaScript con módulos ES nativos. Todo el
+estado vive en memoria y se refleja en el fragmento de la URL.
 
-Además: tema claro y oscuro, diseño adaptable a móvil, navegación por teclado y acceso
-directo a la **Línea 100** en la cabecera.
+```
+app/                              raíz publicada
+├── index.html
+├── assets/
+│   ├── css/styles.css
+│   ├── iconos/                   14 PNG, uno por tipo de centro
+│   └── js/
+│       ├── app.js                estado, filtros y orquestación
+│       ├── datos.js              carga del directorio y filtrado
+│       ├── geo.js                distancias y estimación de trayecto
+│       ├── mapa.js               capa Leaflet
+│       └── ui.js                 listado y ficha detallada
+└── data/
+    ├── centros.json              704 centros + catálogo territorial
+    ├── iconos.json               tipo de centro → icono y color
+    └── geo/
+        ├── departamentos.geojson
+        ├── provincias/<cc>.geojson
+        └── distritos/<cc>.geojson
+
+tools/                            generación de datos (Node, sólo desarrollo)
+```
+
+### Dependencias de ejecución
+
+| Componente | Origen | Notas |
+|---|---|---|
+| Leaflet 1.9.4 | cdnjs, con `integrity` SRI | |
+| Leaflet.markercluster 1.5.3 | cdnjs, con `integrity` SRI | |
+| Teselas del mapa base | Esri *Light/Dark Gray Canvas* | Sin clave de API. El caché llega a z16; por encima se reescala vía `maxNativeZoom` |
+
+No se usan CARTO ni las teselas estándar de OSM: las primeras exigen clave y las segundas
+restringen este tipo de uso.
+
+### Carga
+
+La carga inicial son unos 650 KB (directorio, iconos y capa de departamentos). Las capas
+provinciales y distritales están partidas por departamento y se descargan sólo al
+seleccionarlos; el archivo más pesado son los distritos de Lima, con 272 KB.
 
 ---
 
 ## Puesta en marcha
 
 ```bash
-npm install     # sólo para reconstruir los datos
+npm install     # sólo necesario para regenerar los datos
 npm start       # sirve app/ en http://localhost:8080
 ```
 
-> La aplicación usa módulos ES y `fetch`, así que **necesita un servidor HTTP**:
-> abrir `app/index.html` con doble clic (`file://`) no funciona.
+La aplicación usa módulos ES y `fetch`, de modo que **requiere un servidor HTTP**: abrir
+`app/index.html` mediante `file://` no funciona.
 
-### Reconstruir los datos
+### Regeneración de datos
 
 ```bash
 npm run build
 ```
 
-Ese comando encadena cuatro pasos:
+Encadena cuatro pasos:
 
-1. **`fetch:geo`** — descarga la cartografía de
-   [Peru-maps](https://github.com/Rodasluis/Peru-maps) (`salida/`) a `.cache/geo`.
-2. **`build:data`** — lee `Directorio de servicios.xlsx` y genera `app/data/centros.json`.
-3. **`build:iconos`** — extrae los iconos de `Icons para centros de atención.xlsx`
-   a `app/assets/iconos/` y los asocia a cada tipo en `app/data/iconos.json`.
-4. **`build:geo`** — simplifica y reparte las capas geográficas en `app/data/geo/`.
+1. `fetch:geo` — descarga la cartografía de [Peru-maps](https://github.com/Rodasluis/Peru-maps) a `.cache/geo`.
+2. `build:data` — lee `Directorio de servicios.xlsx` y genera `app/data/centros.json`.
+3. `build:iconos` — extrae los iconos de `Icons para centros de atención.xlsx` y los cruza con los tipos del directorio.
+4. `build:geo` — simplifica las capas geográficas y las reparte por departamento.
 
-Conviene leer la salida de `build:data`: enumera cuántos centros se publican, cuáles se
-excluyen y por qué motivo, y **avisa si aparece un tipo de servicio sin clasificar**.
+La salida de `build:data` detalla cuántos centros se publican, cuáles se excluyen y por
+qué, y **advierte de cualquier tipo de servicio sin clasificar**. Los datos generados están
+versionados, por lo que sólo es necesario reconstruirlos cuando cambien los archivos de
+origen.
 
-Los datos generados **están versionados**, así que sólo hace falta ejecutarlo cuando
-cambie el Excel de origen.
+### Publicación
 
----
-
-## Publicar en GitHub Pages
-
-El repositorio incluye `.github/workflows/deploy.yml`, que publica la carpeta `app/`
-en cada push a `main`.
-
-1. Sube el repositorio a GitHub.
-2. Haz push a `main`. El workflow habilita Pages solo (`enablement: true`) y publica
-   el sitio; la URL aparece en el resumen de la acción y en **Settings › Pages**.
-
-> **Si la acción falla con `Get Pages site failed … Error: Not Found`**, es que Pages
-> todavía no está activado y el repositorio no permite activarlo por API. Ve a
-> **Settings › Pages**, en *Source* elige **GitHub Actions**, y vuelve a lanzar el
-> workflow desde la pestaña *Actions* (*Re-run jobs*).
->
-> En repositorios **privados**, Pages requiere un plan de pago; con la cuenta gratuita
-> hay que hacer público el repositorio.
-
-<details>
-<summary>Alternativa sin Actions</summary>
-
-Copia el contenido de `app/` a la raíz del repositorio (o a `docs/`) y en
-**Settings › Pages** selecciona *Deploy from a branch* apuntando a esa carpeta.
-Todas las rutas del proyecto son relativas, así que funciona igual en
-`usuario.github.io/repositorio/` que en un dominio propio.
-</details>
+`.github/workflows/deploy.yml` publica la carpeta `app/` en GitHub Pages en cada push a
+`main`. El flujo habilita Pages por API (`enablement: true`); si el repositorio no lo
+permite, debe activarse manualmente en *Settings › Pages* con origen *GitHub Actions*.
+Todas las rutas son relativas, así que el sitio funciona igual bajo un subdirectorio
+(`usuario.github.io/repositorio/`) que en un dominio propio.
 
 ---
 
-## Estructura
+## Criterio de publicación de los datos
 
-```
-├── Directorio de servicios.xlsx   fuente de datos (no se publica)
-├── Icons para centros de atención.xlsx   iconos por tipo (no se publica)
-├── app/                           ← esto es lo que se publica
-│   ├── index.html
-│   ├── assets/
-│   │   ├── css/styles.css
-│   │   ├── iconos/                iconos por tipo de centro (del .xlsx)
-│   │   └── js/
-│   │       ├── app.js             estado, filtros y orquestación
-│   │       ├── datos.js           carga del directorio y filtrado
-│   │       ├── geo.js             distancias y estimación de trayecto
-│   │       ├── mapa.js            capa Leaflet
-│   │       └── ui.js              listado y ficha detallada
-│   └── data/
-│       ├── centros.json           704 centros físicos + catálogo territorial
-│       ├── iconos.json            tipo de centro → icono y color
-│       └── geo/
-│           ├── departamentos.geojson
-│           ├── provincias/<cc>.geojson
-│           └── distritos/<cc>.geojson
-└── tools/                         scripts de construcción (Node)
-```
+De los 826 registros del directorio se publican **704**: los que constituyen un centro de
+atención físico *y* disponen de coordenadas propias. El criterio se compone de tres reglas,
+definidas en `tools/build-data.mjs`:
 
-Las capas provinciales y distritales están **partidas por departamento** y se descargan
-sólo cuando hacen falta: la carga inicial son unos 650 KB (directorio + departamentos + iconos),
-y ningún archivo posterior supera los 272 KB.
+1. **Automática** — sin coordenadas propias no hay punto que representar.
+2. **Revisada** — cada valor de la columna `CENTRO` se clasificó a partir de su columna
+   `Servicio`, sus nombres y sus direcciones. El motivo queda registrado junto a cada regla
+   en la tabla `CLASIFICACION`, de modo que la decisión es auditable.
+3. **Exclusión por defecto** — un tipo de servicio ausente de esa tabla no se publica y el
+   build lo advierte. Un servicio nuevo no puede aparecer en el mapa sin revisión previa.
+
+| Excluido | Registros | Motivo |
+|---|---:|---|
+| Hogares de Refugio Temporal | 29 | Dirección reservada por protección de las víctimas |
+| Coordinación Territorial | 26 | Oficina administrativa, sin atención al público |
+| SOUFCAT | 24 | Sede de operación de la UFCAT |
+| Educadores de Calle | 23 | Intervención en vía pública |
+| Familias Igualitarias | 10 | Programa por zonas, opera dentro de un CEDIF |
+| CAR Especializado | 6 | Sin coordenadas en el directorio |
+| Línea 100 · Chat 100 | 2 | Atención telefónica y virtual de alcance nacional |
+| Inabif en Acción | 1 | Equipo móvil de emergencias |
+| Unidad de Asistencia Económica | 1 | Unidad administrativa |
+
+### Calidad de las coordenadas
+
+Cada coordenada se contrastó con los límites distritales del INEI:
+
+| Situación | Registros | Tratamiento |
+|---|---:|---|
+| El punto cae en el distrito declarado | 739 | Se usa sin observaciones |
+| El punto cae en otro distrito | 50 | Se usa; la ficha advierte que puede ser aproximado |
+| El punto no cae en ningún distrito | 2 | Se usa, con la misma advertencia |
+| Sin coordenadas | 35 | Se excluyen del mapa |
+
+### Transformaciones aplicadas
+
+- **Coordenadas sin punto decimal.** Dos registros traen valores como `-80744639` en lugar
+  de `-80.744639`. Se corrigen dividiendo *ambos* ejes por la misma potencia de diez y
+  verificando que el resultado cae dentro del Perú: aplicar un factor distinto a cada eje
+  produce puntos verosímiles pero erróneos.
+- **Nombres.** Se normalizan a mayúscula inicial conservando las siglas (`CEM`, `CAR`,
+  `CEDIF`…). Los nombres de departamento, provincia y distrito provienen del catálogo
+  oficial de ubigeos, con su acentuación correcta.
+- **Iconos.** Se extraen del `.xlsx` leyendo los anclajes de dibujo del libro —la etiqueta
+  de cada imagen es el texto de la fila donde está anclada— y se cruzan con los tipos del
+  directorio por nombre normalizado. El color del aro es el tono dominante del propio PNG,
+  descodificado sin dependencias externas; si resulta demasiado claro para distinguirse
+  sobre el marcador blanco, se oscurece.
+- **Clave de unión.** El ubigeo de seis dígitos enlaza el directorio con la cartografía; los
+  826 registros cruzan correctamente. La etiqueta administrativa del MIMP (*Lima
+  Metropolitana* / *Lima Provincias*) se conserva en el campo `ambito`, mientras que los
+  filtros y el mapa emplean los 25 departamentos oficiales del INEI.
 
 ---
 
-## Cómo se calculan distancia y tiempo
+## Distancia y tiempo de viaje
 
-La **distancia** es la distancia real sobre la superficie terrestre entre tu ubicación y
-el centro (fórmula de Haversine), no la distancia por carretera.
+La **distancia** es la separación real sobre la superficie terrestre entre el origen y el
+centro, calculada con la fórmula de Haversine. No es distancia por carretera.
 
-El **tiempo en automóvil es una estimación**, porque un sitio estático no puede consultar
-un servicio de rutas. El modelo (en [`app/assets/js/geo.js`](app/assets/js/geo.js)) hace:
+El **tiempo en automóvil es una estimación**: un sitio estático no puede consultar un
+servicio de rutas. El modelo, en [`app/assets/js/geo.js`](app/assets/js/geo.js), aplica:
 
 ```
 distancia por vía = línea recta × factor de rodeo
@@ -145,93 +171,50 @@ tiempo            = distancia por vía ÷ (velocidad base × factor de relieve)
 | Sierra | 1,55 | 0,70 |
 | Selva | 1,60 | 0,75 |
 
-La velocidad base va de 20 km/h (trayectos urbanos cortos) a 68 km/h (carretera larga).
-En la Amazonía, los destinos a más de 60 km avisan de que el acceso puede ser fluvial.
-
-Para el trayecto real, el botón **Cómo llegar** abre Google Maps.
+La velocidad base va de 20 km/h en trayectos urbanos cortos a 68 km/h en carretera. En la
+Amazonía, los destinos a más de 60 km advierten de que el acceso puede ser fluvial. El
+botón *Cómo llegar* deriva el trayecto real a Google Maps.
 
 ---
 
-## Qué servicios se publican
+## Comportamiento del mapa
 
-De los 826 registros del directorio se publican **704**: los que son un centro de atención
-físico *y* tienen coordenadas propias. La condición se compone de tres reglas, en
-`tools/build-data.mjs`:
-
-1. **Automática** — sin coordenadas propias no hay punto que mapear.
-2. **Revisada** — cada valor de la columna `CENTRO` se clasificó leyendo su columna
-   `Servicio`, sus nombres y sus direcciones. El motivo queda escrito junto a cada regla
-   en la tabla `CLASIFICACION`, para poder auditarlo.
-3. **Por defecto excluye** — un tipo de servicio que no figure en esa tabla **no aparece**
-   y el build lo avisa. Así, si el MIMP añade un servicio nuevo, nadie lo publica en el
-   mapa sin haberlo revisado antes.
-
-| Excluidos | Registros | Motivo |
-|---|---:|---|
-| Hogares de Refugio Temporal | 29 | Dirección reservada para proteger a las víctimas |
-| Coordinación Territorial | 26 | Oficina administrativa, no atiende público |
-| SOUFCAT | 24 | «Sede de operación de la UFCAT» |
-| Educadores de Calle | 23 | Intervención en vía pública |
-| Familias Igualitarias | 10 | Programa por zonas, opera dentro de un CEDIF |
-| CAR Especializado | 6 | Sin coordenadas en el directorio |
-| Línea 100 · Chat 100 | 2 | Atención telefónica y virtual de alcance nacional |
-| Inabif en Acción | 1 | Equipo móvil de emergencias |
-| Unidad de Asistencia Económica | 1 | Unidad administrativa |
-
-## Calidad de las coordenadas
-
-Cada coordenada del directorio se contrastó con los límites distritales del INEI:
-
-| Situación | Registros | Tratamiento |
-|---|---:|---|
-| El punto cae en el distrito declarado | 739 | Se usa tal cual. |
-| El punto cae en otro distrito | 50 | Se usa, y la ficha advierte que puede ser aproximado. |
-| El punto no cae en ningún distrito | 2 | Se usa, con la misma advertencia. |
-| Sin coordenadas | 35 | Se excluyen del mapa. |
-
-Otros ajustes que hace `tools/build-data.mjs`:
-
-- **Dos registros sin punto decimal** (`-80744639` en vez de `-80.744639`) se corrigen
-  dividiendo *ambos* ejes por la misma potencia de 10 y comprobando que el resultado cae
-  dentro del Perú. Aplicar un factor distinto a cada eje produce puntos verosímiles pero
-  equivocados.
-- Los **nombres** se normalizan a mayúscula inicial conservando las siglas (`CEM`, `CAR`,
-  `CEDIF`…), y los de departamento, provincia y distrito se toman del catálogo oficial de
-  ubigeos, con sus tildes.
-- Los **iconos** se extraen del `.xlsx` leyendo los anclajes de dibujo del libro (la
-  etiqueta de cada imagen es el texto de la fila donde está anclada) y se cruzan con los
-  tipos del directorio por nombre normalizado. El color del aro es el tono dominante del
-  propio PNG, descodificado sin dependencias externas; si sale demasiado claro para verse
-  sobre la chapa blanca, se oscurece.
-- El ubigeo de 6 dígitos es la clave de unión con la cartografía: los 826 registros cruzan
-  correctamente. La etiqueta administrativa del MIMP (*Lima Metropolitana* / *Lima
-  Provincias*) se conserva aparte, en el campo `ambito`, mientras que los filtros y el mapa
-  usan los 25 departamentos oficiales del INEI.
+- **Agrupación de marcadores.** Se desactiva a partir del zoom 11. El umbral procede de
+  medir el solapamiento real por celda del tamaño del icono: 88 % a z5 —con 140 marcadores
+  apilados en Breña—, 62 % a z8 y 36 % a z11, ya manejable. Con 25 resultados o menos no se
+  agrupa en ningún zoom.
+- **Tamaño de los marcadores.** Escala con el zoom en cinco tramos, de 18 px en vista
+  nacional a 34 px en distrito.
+- **Grupos.** Son informativos: muestran el icono del tipo predominante y el recuento, no
+  capturan el puntero y no modifican el encuadre. El zoom depende siempre de la selección
+  territorial.
+- **Límites territoriales.** Se renderizan en SVG, no en canvas: nunca hay más de ~180
+  polígonos simultáneos —los distritos de un departamento— y con elementos reales el clic
+  y el resaltado son fiables. El nivel de detalle sigue al filtro activo.
+- **Simplificación.** Las capas se simplifican sobre una topología construida con todos los
+  polígonos de cada nivel a la vez, de modo que los bordes compartidos se simplifican de
+  forma idéntica y no aparecen huecos entre vecinos.
 
 ---
 
 ## Privacidad
 
-La ubicación se obtiene con la API de geolocalización del navegador y se usa **sólo en el
-dispositivo** para ordenar la lista. No se envía a ningún servidor ni se almacena; sólo se
-refleja en la URL si decides compartir el enlace.
+La ubicación se obtiene mediante la API de geolocalización del navegador y se utiliza
+exclusivamente en el dispositivo para ordenar los resultados. No se transmite a ningún
+servidor ni se almacena; sólo se refleja en la URL cuando el usuario decide compartir el
+enlace.
 
 ---
 
-## Tecnología
+## Accesibilidad
 
-Sin framework ni empaquetador: HTML, CSS y JavaScript con módulos ES.
-
-- [Leaflet 1.9.4](https://leafletjs.com/) y
-  [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) desde cdnjs,
-  con `integrity` (SRI).
-- Mapa base: teselas *Light/Dark Gray Canvas* de Esri, que no requieren clave de API.
-- Construcción de datos: Node ≥ 18 y `topojson-*` (sólo en desarrollo). El `.xlsx` se lee
-  descomprimiéndolo directamente, sin librerías de Excel.
+Interfaz en español, navegable por teclado, con contraste conforme a WCAG AA, marcadores
+enfocables, cierre con `Escape` en los diálogos y soporte de tema claro y oscuro. El diseño
+es adaptable a partir de 390 px de ancho.
 
 ---
 
-## Créditos y fuentes
+## Fuentes
 
 - **Directorio de Servicios del MIMP** — Ministerio de la Mujer y Poblaciones Vulnerables.
 - **Límites territoriales** — [Peru-maps](https://github.com/Rodasluis/Peru-maps), derivados
