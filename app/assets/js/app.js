@@ -202,6 +202,16 @@ function textoRadio() {
   return r === null ? 'Sin límite' : r < 1 ? `${r * 1000} m` : `${String(r).replace('.', ',')} km`;
 }
 
+/** Encuadre que corresponde al estado actual de los filtros. */
+function encuadrarSegunEstado(lista = ultimaLista) {
+  if (territorioActual()) mapa.encuadrarTerritorio(territorioActual());
+  else if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
+  // Sin filtro alguno se muestra el país completo; con un filtro de tipo o
+  // de texto interesa más ceñirse a los centros que quedan.
+  else if (estado.tipo || estado.q) mapa.encuadrarCentros(lista);
+  else mapa.encuadrarPais();
+}
+
 function refrescar({ moverMapa = false } = {}) {
   const { lista, fueraDeRadio, totalTerritorial } = filtrar(DIR.centros, {
     origen: estado.origen,
@@ -290,11 +300,7 @@ function refrescar({ moverMapa = false } = {}) {
     mapa.resaltar(estado.seleccionado, false);
   }
 
-  if (moverMapa) {
-    if (territorioActual()) mapa.encuadrarTerritorio(territorioActual());
-    else if (estado.origen) mapa.encuadrarRadio(estado.origen, radioKm());
-    else mapa.encuadrarCentros(lista);
-  }
+  if (moverMapa) encuadrarSegunEstado(lista);
 
   escribirURL();
 }
@@ -691,6 +697,8 @@ function cambiarVista(vista) {
     b.classList.toggle('is-active', activo);
     b.setAttribute('aria-pressed', String(activo));
   });
+  // Al mostrar el mapa hay que remedirlo; si el encuadre quedó pendiente por
+  // haberse pedido sin tamaño, el propio mapa avisará para rehacerlo.
   if (vista === 'mapa') requestAnimationFrame(() => mapa.invalidar());
 }
 
@@ -718,6 +726,7 @@ async function iniciar() {
     alElegirTerritorio: seleccionarTerritorio,
     alPedirUbicacion: usarMiUbicacion,
     alCargarCapa: (cargando) => document.body.classList.toggle('cargando-capa', cargando),
+    alRecuperarTamano: () => { if (estado.seleccionado == null) encuadrarSegunEstado(); },
   }, ICONOS);
   mapa.aplicarTema(temaOscuroActivo());
 

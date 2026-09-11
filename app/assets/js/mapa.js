@@ -120,6 +120,18 @@ export class MapaCentros {
     });
     this.grupo.addTo(this.mapa);
 
+    // En móvil el mapa está oculto mientras se ve el listado, así que el
+    // encuadre de apertura se calcula sobre un contenedor que no es el
+    // definitivo. Cuando el tamaño cambia de forma apreciable —cambiar de
+    // pestaña lo pasa de 181 a 498 px de alto— hay que rehacerlo.
+    this.mapa.on('resize', () => {
+      if (!this.#tamanoUtil() || !this.#tamanoMuyDistinto()) return;
+      this._encuadrePendiente = false;
+      // Un fotograma después: al cambiar de tamaño Leaflet reposiciona el
+      // panel por su cuenta, y encuadrar antes de eso deja el mapa desplazado.
+      requestAnimationFrame(() => this.manejadores.alRecuperarTamano?.());
+    });
+
     // El tamaño del marcador depende del zoom, así que hay que repintarlos
     // al terminar cada cambio de escala.
     this.zoomActual = this.mapa.getZoom();
@@ -391,7 +403,7 @@ export class MapaCentros {
 
   /** Encuadra el mapa al origen y su radio. */
   encuadrarRadio(origen, radioKm) {
-    if (!origen) return;
+    if (!origen || this.#aplazarSiSinTamano()) return;
     if (radioKm) {
       // getBounds() de un L.circle sin añadir al mapa lanza excepción: necesita
       // el mapa para convertir metros a grados. toBounds() no lo necesita, y
@@ -443,6 +455,7 @@ export class MapaCentros {
     const estilo = this.#estiloLimite();
     this.capaLimites = L.geoJSON(datos, {
       pane: 'limites',
+      // El renderizador SVG se comparte con el remarcado de la selección.
       // SVG en lugar del canvas del mapa: nunca se cargan más de ~180
       // polígonos a la vez (los distritos de un departamento), y con
       // elementos reales el clic y el resaltado son fiables.
@@ -463,6 +476,10 @@ export class MapaCentros {
         });
       },
     }).addTo(this.mapa);
+
+    // Los límites del país se guardan al pasar por aquí, para que
+    // encuadrarPais() no tenga que esperar a ninguna descarga.
+    if (efectivo === 'departamentos') this._boundsPais = this.capaLimites.getBounds();
 
     return { nivel: efectivo };
   }
@@ -524,6 +541,7 @@ export class MapaCentros {
    */
   async encuadrarTerritorio(codigo) {
     await this.resaltarTerritorio(codigo);
+    if (this.#aplazarSiSinTamano()) return;
 
     if (!codigo) {
       this.mapa.fitBounds(PERU_BOUNDS, { padding: [10, 10] });
@@ -542,8 +560,46 @@ export class MapaCentros {
    * El margen superior es mayor porque el marcador se dibuja por encima de su
    * punto: con un margen parejo, los centros del norte quedarían cortados.
    */
+  /**
+   * Encuadra el país entero. Ajustarse a los centros dejaba cortada la punta
+   * norte: el centro más septentrional está en el paralelo −2,45 y el
+   * territorio llega hasta −0,03, así que sobraba mapa por arriba.
+   */
+  /** ¿El contenedor tiene ya un tamaño con el que se pueda encuadrar? */
+  #tamanoUtil() {
+    const t = this.mapa.getSize();
+    return t.x > 80 && t.y > 80;
+  }
+
+  /**
+   * Anota que el encuadre se pidió sin tamaño, para rehacerlo luego, y en
+   * caso contrario guarda con qué medidas se encuadró.
+   */
+  #aplazarSiSinTamano() {
+    if (!this.#tamanoUtil()) { this._encuadrePendiente = true; return true; }
+    this._tamanoEncuadre = this.mapa.getSize();
+    return false;
+  }
+
+  /** ¿El contenedor ha cambiado tanto que el encuadre anterior ya no vale? */
+  #tamanoMuyDistinto() {
+    if (this._encuadrePendiente) return true;
+    if (!this._tamanoEncuadre) return false;
+    const t = this.mapa.getSize();
+    const cambio = (a, b) => Math.abs(a - b) / Math.max(a, b) > 0.25;
+    return cambio(t.x, this._tamanoEncuadre.x) || cambio(t.y, this._tamanoEncuadre.y);
+  }
+
+  encuadrarPais() {
+    if (this.#aplazarSiSinTamano()) return;
+    // Sin await: si el encuadre se aplaza a un microtask, llega después del
+    // reposicionado que Leaflet hace al cambiar de tamaño y el país acaba
+    // desplazado hacia arriba. Los límites se toman ya precargados.
+    this.mapa.fitBounds(this._boundsPais || PERU_BOUNDS, { padding: [20, 20], animate: false });
+  }
+
   encuadrarCentros(centros) {
-    if (!centros.length) return;
+    if (!centros.length || this.#aplazarSiSinTamano()) return;
     const b = L.latLngBounds(centros.map((c) => [c.lat, c.lon]));
     this.mapa.fitBounds(b, {
       paddingTopLeft: [24, 54],

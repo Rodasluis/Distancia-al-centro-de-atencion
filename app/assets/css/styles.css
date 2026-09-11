@@ -840,9 +840,13 @@ body.cargando-capa .mapa-wrap::before {
     padding-bottom: 20px;
   }
 
-  /* una vista a la vez: la controla data-vista en <body> */
+  /* Una vista a la vez, controlada por data-vista en <body>.
+     El mapa se oculta con visibility, no con display: así conserva su
+     tamaño real y Leaflet lo encuadra bien desde el principio. Con
+     display:none se medía sobre una caja vacía y el país salía recortado. */
   body[data-vista="mapa"] .panel { display: none; }
-  body[data-vista="lista"] .mapa-wrap { display: none; }
+  .mapa-wrap { position: absolute; inset: 0; }
+  body[data-vista="lista"] .mapa-wrap { visibility: hidden; }
 
   .tabbar {
     flex: none; z-index: 950;
